@@ -1,0 +1,27 @@
+# Operating System
+.DS_Store
+
+# Logs
+logs
+*.log
+*.log.*
+
+# Code coverage info
+.nyc_output/
+coverage
+
+# Dependency directory
+node_modules
+
+# idea
+.idea/*
+!/.idea/runConfigurations
+
+# vscode
+.vscode/*
+!/.vscode/launch.json
+
+# .env
+.env
+credentials.json
+token.json
