@@ -1,6 +1,6 @@
 import moment from 'moment';
 
-export function colName(n: number) {
+export const colName = (n: number) => {
     const ordA = 'A'.charCodeAt(0);
     const ordZ = 'Z'.charCodeAt(0);
     const len = ordZ - ordA + 1;
@@ -13,6 +13,6 @@ export function colName(n: number) {
     return s;
 }
 
-export function getCurrentMonthString() {
+export const getCurrentMonthString = () => {
     return moment().format('L');
 }

@@ -1,21 +1,10 @@
 const index: Pool[] = [];
 
-type TQuestion = {
-    id: number;
-    text: string;
-}
-
-type TAnswer = {
-    id: number;
-    text: string;
-}
-
-class Pool {
-
+export class Pool {
     chatId: number;
     isActive: boolean;
     private readonly questions: TQuestion[];
-    private answers: TAnswer[];
+    readonly answers: TAnswer[];
     private index: number;
 
     constructor(chatId: number, questions: TQuestion[]) {
@@ -43,13 +32,10 @@ class Pool {
     }
 }
 
-const appendPool = (pool: Pool) => {
+export const appendPool = (pool: Pool) => {
     index.push(pool);
 }
 
-const findActivePoolByChatId = (chatId: number) => {
+export const findActivePoolByChatId = (chatId: number) => {
     return index.find((pool) => pool.chatId === chatId && pool.isActive)
 }
-
-export = { appendPool, findActivePoolByChatId, Pool }
-

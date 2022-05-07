@@ -50,7 +50,19 @@ async function getColumnValues(auth: OAuth2Client, column: string): Promise<any>
     }
 }
 
-async function getPaymentSources(auth: OAuth2Client): Promise<any> {
+async function getLatestDateColumn(auth: OAuth2Client) {
+    const sheets = google.sheets({ version: 'v4', auth });
+    const dates = await getDates(sheets);
+
+    if (!dates.length) return null;
+
+    return {
+        column: colName(staticColumns.length + dates.length - 1),
+        date: dates.pop()
+    };
+}
+
+export async function getPaymentSources(auth: OAuth2Client): Promise<any> {
     const sheets = google.sheets({version: 'v4', auth});
     try {
         const lastStaticColumn = colName(staticColumns.length - 1);
@@ -76,7 +88,7 @@ async function getPaymentSources(auth: OAuth2Client): Promise<any> {
     }
 }
 
-async function createColumn(auth: OAuth2Client) {
+export async function createColumn(auth: OAuth2Client): Promise<string> {
     const sheets = google.sheets({version: 'v4', auth});
 
     const month = getCurrentMonthString();
@@ -87,37 +99,20 @@ async function createColumn(auth: OAuth2Client) {
     }
 
     const column = colName(staticColumns.length + dates.length)
-    try {
-        // @ts-ignore
-        await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: `${sheetName}!${column}1:${column}`,
-            valueInputOption: 'USER_ENTERED',
-            resource: {
-                majorDimension: 'COLUMNS',
-                values: [[getCurrentMonthString()]]
-            }
-        });
-        return column;
-    } catch (err) {
-        console.log('The API returned an error: ' + err);
-    }
-    return null;
+    // @ts-ignore
+    await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${sheetName}!${column}1:${column}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+            majorDimension: 'COLUMNS',
+            values: [[getCurrentMonthString()]]
+        }
+    });
+    return column;
 }
 
-async function getLatestDateColumn(auth: OAuth2Client) {
-    const sheets = google.sheets({ version: 'v4', auth });
-    const dates = await getDates(sheets);
-
-    if (!dates.length) return null;
-
-    return {
-        column: colName(staticColumns.length + dates.length - 1),
-        date: dates.pop()
-    };
-}
-
-async function setValue(auth: OAuth2Client, column: string, id: number, value: string) {
+export async function setValue(auth: OAuth2Client, column: string, id: number, value: string) {
     const sheets = google.sheets({version: 'v4', auth});
     const row = await getValueTargetRowById(auth, sheets, id);
     const cell = `${column}${row}`;
@@ -137,21 +132,21 @@ async function setValue(auth: OAuth2Client, column: string, id: number, value: s
     }
 }
 
-async function checkAllValuesSet(auth: OAuth2Client, column: string) {
+export async function checkAllValuesSet(auth: OAuth2Client, column: string) {
     const sources = await getPaymentSources(auth);
     const values = await getColumnValues(auth, column);
     const definedValues = values.filter(Boolean);
     return sources.length === definedValues.length;
 }
 
-async function getAllRecipients(auth: OAuth2Client) {
+export async function getAllRecipients(auth: OAuth2Client): Promise<string[]> {
     const sources = await getPaymentSources(auth);
     // @ts-ignore
     const recipients = sources.map((source) => source.chatId).filter(s => s);
-    return [...new Set(recipients)];
+    return [...new Set(recipients)] as string[];
 }
 
-async function getLatestSummaryByCurrency(auth: OAuth2Client, equivalenceCurrency: Currency) {
+export async function getLatestSummaryByCurrency(auth: OAuth2Client, equivalenceCurrency: Currency): Promise<any> {
     const latestDateColumnData = await getLatestDateColumn(auth);
     if (!latestDateColumnData) return null;
 
@@ -189,13 +184,4 @@ async function getLatestSummaryByCurrency(auth: OAuth2Client, equivalenceCurrenc
             amount: equivalenceAmount
         }
     };
-}
-
-module.exports = {
-    getPaymentSources,
-    createColumn,
-    setValue,
-    checkAllValuesSet,
-    getAllRecipients,
-    getLatestSummaryByCurrency
 }

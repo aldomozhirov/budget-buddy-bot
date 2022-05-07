@@ -1,6 +1,5 @@
 import fs from 'fs';
 import { google } from 'googleapis';
-import { Credentials } from 'google-auth-library/build/src/auth/credentials';
 import { OAuth2Client } from 'google-auth-library';
 
 // If modifying these scopes, delete token.json.
@@ -22,22 +21,13 @@ async function getOAuth2Client(): Promise<OAuth2Client> {
     return new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
 }
 
-export async function getAuth(callback: any) {
-    try {
-        const oAuth2Client = await getOAuth2Client();
-        return authorize(oAuth2Client, callback);
-    } catch (err) {
-        console.log('Error loading client secret file:', err);
-    }
-}
-
 /**
  * Create an OAuth2 client with the given credentials, and then execute the
  * given callback function.
  * @param oAuth2Client
  * @param callback
  */
-async function authorize(oAuth2Client: OAuth2Client, callback: any): Promise<OAuth2Client> {
+async function authorize(oAuth2Client: OAuth2Client, callback: (authHref: string) => void): Promise<OAuth2Client> {
     try {
         const token = await fs.readFileSync(TOKEN_PATH).toString();
         oAuth2Client.setCredentials(JSON.parse(token));
@@ -52,7 +42,7 @@ async function authorize(oAuth2Client: OAuth2Client, callback: any): Promise<OAu
     return oAuth2Client;
 }
 
-function getAuthUrl(oAuth2Client: any): string {
+function getAuthUrl(oAuth2Client: OAuth2Client): string {
     return oAuth2Client.generateAuthUrl({
         access_type: 'offline',
         scope: SCOPES,
@@ -60,14 +50,26 @@ function getAuthUrl(oAuth2Client: any): string {
 }
 
 /**
- * Get and store new token after prompting for user authorization, and then
- * execute the given callback with the authorized OAuth2 client.
- * @param {google.auth.OAuth2} oAuth2Client The OAuth2 client to get token for.
+ * Create OAuth2 client and authorise it
+ * @param callback
+ */
+export async function getAuth(callback: (authHref: string) => void): Promise<OAuth2Client> {
+    try {
+        const oAuth2Client = await getOAuth2Client();
+        return authorize(oAuth2Client, callback);
+    } catch (err) {
+        console.log('Error loading client secret file:', err);
+        throw err;
+    }
+}
+
+/**
+ * Get and store new token for a given code
  * @param code
  */
 export async function storeNewToken(code: string): Promise<OAuth2Client> {
-    const oAuth2Client = await getOAuth2Client();
     try {
+        const oAuth2Client = await getOAuth2Client();
         const { tokens } = await oAuth2Client.getToken(code);
         oAuth2Client.setCredentials(tokens);
         // Store the token to disk for later program executions
@@ -75,8 +77,9 @@ export async function storeNewToken(code: string): Promise<OAuth2Client> {
             if (err) return console.error(err);
             console.log('Token stored to', TOKEN_PATH);
         });
+        return oAuth2Client;
     } catch (err) {
         if (err) console.error('Error while trying to retrieve access token', err);
+        throw err;
     }
-    return oAuth2Client;
 }

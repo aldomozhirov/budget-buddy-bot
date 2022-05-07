@@ -1,37 +1,20 @@
-require('dotenv').config();
-const { Telegraf, Markup } = require('telegraf');
-const {
+import 'dotenv/config';
+import { Telegraf, Markup } from 'telegraf';
+import {
     createColumn,
     getPaymentSources,
     setValue,
     checkAllValuesSet,
     getAllRecipients,
     getLatestSummaryByCurrency
-} = require('./src/spreadsheets');
-const { Pool, appendPool, findActivePoolByChatId } = require('./src/pools');
+} from './src/spreadsheets';
+import { Pool, appendPool, findActivePoolByChatId } from './src/pools';
+import { formatSummaryByCurrency, formatEquivalence } from './src/formatters';
 import { getAuth, storeNewToken } from './src/spreadsheets/auth';
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-
-type TEquivalence = {
-    amount: number;
-    currency: string;
-};
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
 
 let isWaitingForCode = false;
-
-const formatSummaryByCurrency = (summary: any) => {
-    let text = '';
-    for (const currency of Object.keys(summary)) {
-        text += `Сумма в ${currency}: ${summary[currency].toFixed(2)}\n`;
-    }
-    return text;
-}
-
-const formatEquivalence = (equivalence: TEquivalence) => {
-    const formattedAmount = equivalence.amount.toFixed(2);
-    return `Эквивалент в переводе на ${equivalence.currency}: ${formattedAmount}`;
-}
 
 const authorizeSpreadsheets = (ctx: any) => {
     return getAuth((authUrl: string) => {
@@ -44,9 +27,8 @@ bot.command('start', async (ctx: any) => {
     let auth;
     try {
         auth = await authorizeSpreadsheets(ctx);
-    } catch (err) {
-        if (err) return;
-    }
+    } catch (err) {}
+    if (!auth) return;
 
     const paymentSources = await getPaymentSources(auth);
     const chatId = ctx.message.chat.id;
@@ -65,9 +47,8 @@ bot.command('summary', async (ctx: any) => {
     let auth;
     try {
         auth = await authorizeSpreadsheets(ctx);
-    } catch (err) {
-        if (err) return;
-    }
+    } catch (err) {}
+    if (!auth) return;
 
     const summaryByCurrency = await getLatestSummaryByCurrency(auth, 'EUR');
     if (!summaryByCurrency) {
@@ -100,9 +81,9 @@ bot.on('text', async (ctx: any) => {
             let auth;
             try {
                 auth = await authorizeSpreadsheets(ctx);
-            } catch (err) {
-                if (err) return;
-            }
+            } catch (err) {}
+            if (!auth) return;
+
             const column = await createColumn(auth);
             for(const answer of pool.answers) {
                 await setValue(auth, column, answer.id, answer.text);
