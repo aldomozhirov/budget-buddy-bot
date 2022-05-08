@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -8,14 +7,13 @@ const SCOPES = [
     'https://www.googleapis.com/auth/drive.file',
     'https://www.googleapis.com/auth/spreadsheets',
 ];
-// The file token.json stores the user's access and refresh tokens, and is
-// created automatically when the authorization flow completes for the first
-// time.
-const TOKEN_PATH = 'token.json';
+
+let currentToken: any;
 
 // Load client secrets from a local file.
 async function getOAuth2Client(): Promise<OAuth2Client> {
-    const content = await fs.readFileSync('credentials.json').toString();
+    const content = process.env.GOOGLE_API_CREDENTIALS;
+    if (!content) throw new Error("Google API credentials not specified");
     const credentials = JSON.parse(content);
     const { client_secret, client_id, redirect_uris } = credentials.installed;
     return new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
@@ -28,18 +26,14 @@ async function getOAuth2Client(): Promise<OAuth2Client> {
  * @param callback
  */
 async function authorize(oAuth2Client: OAuth2Client, callback: (authHref: string) => void): Promise<OAuth2Client> {
-    try {
-        const token = await fs.readFileSync(TOKEN_PATH).toString();
-        oAuth2Client.setCredentials(JSON.parse(token));
-    } catch (err) {
-        console.log(err);
-        if (err) {
-            const authUrl = getAuthUrl(oAuth2Client);
-            await callback(authUrl);
-            throw err;
-        }
+    if (currentToken) {
+        oAuth2Client.setCredentials(currentToken);
+        return oAuth2Client;
+    } else {
+        const authUrl = getAuthUrl(oAuth2Client);
+        await callback(authUrl);
+        throw new Error("Access token undefined or expired");
     }
-    return oAuth2Client;
 }
 
 function getAuthUrl(oAuth2Client: OAuth2Client): string {
@@ -72,11 +66,7 @@ export async function storeNewToken(code: string): Promise<OAuth2Client> {
         const oAuth2Client = await getOAuth2Client();
         const { tokens } = await oAuth2Client.getToken(code);
         oAuth2Client.setCredentials(tokens);
-        // Store the token to disk for later program executions
-        fs.writeFile(TOKEN_PATH, JSON.stringify(tokens), (err) => {
-            if (err) return console.error(err);
-            console.log('Token stored to', TOKEN_PATH);
-        });
+        currentToken = tokens;
         return oAuth2Client;
     } catch (err) {
         if (err) console.error('Error while trying to retrieve access token', err);
