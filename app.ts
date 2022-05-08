@@ -109,6 +109,10 @@ bot.on('text', async (ctx: any) => {
     }
 });
 
-bot.telegram.setWebhook(`${URL}/bot${API_TOKEN}`);
-// @ts-ignore
-bot.startWebhook(`/bot${API_TOKEN}`, null, PORT);
+if (process.env.NODE_ENV === 'production') {
+    bot.telegram.setWebhook(`${URL}/bot${API_TOKEN}`);
+    // @ts-ignore
+    bot.startWebhook(`/bot${API_TOKEN}`, null, PORT);
+} else {
+    bot.launch();
+}
