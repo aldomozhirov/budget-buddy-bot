@@ -12,6 +12,10 @@ import { Pool, appendPool, findActivePoolByChatId } from './src/pools';
 import { formatSummaryByCurrency, formatEquivalence } from './src/formatters';
 import { getAuth, storeNewToken } from './src/spreadsheets/auth';
 
+const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const PORT = process.env.PORT || 3000;
+const URL = process.env.URL || 'https://budget-buddy-bot.herokuapp.com';
+
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
 
 let isWaitingForCode = false;
@@ -105,4 +109,6 @@ bot.on('text', async (ctx: any) => {
     }
 });
 
-bot.launch();
+bot.telegram.setWebhook(`${URL}/bot${API_TOKEN}`);
+// @ts-ignore
+bot.startWebhook(`/bot${API_TOKEN}`, null, PORT);
