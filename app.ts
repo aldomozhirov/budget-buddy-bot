@@ -105,8 +105,4 @@ bot.on('text', async (ctx: any) => {
     }
 });
 
-bot.launch({
-    webhook: {
-        port: parseInt(process.env.WEBHOOK_PORT || '5000')
-    }
-});
+bot.launch();
