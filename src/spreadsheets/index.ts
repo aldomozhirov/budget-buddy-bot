@@ -50,14 +50,17 @@ async function getColumnValues(auth: OAuth2Client, column: string): Promise<any>
     }
 }
 
-async function getLatestDateColumn(auth: OAuth2Client) {
+async function getLatestDateColumn(auth: OAuth2Client, shift?: number) {
     const sheets = google.sheets({ version: 'v4', auth });
     const dates = await getDates(sheets);
 
     if (!dates.length) return null;
 
+    const colNumber = staticColumns.length + dates.length - 1 + (shift || 0);
+    if (colNumber < staticColumns.length) return null;
+
     return {
-        column: colName(staticColumns.length + dates.length - 1),
+        column: colName(colNumber),
         date: dates.pop()
     };
 }
@@ -163,11 +166,8 @@ export async function getLatestValues(auth: OAuth2Client): Promise<any> {
     return result;
 }
 
-export async function getLatestSummaryByCurrency(auth: OAuth2Client, equivalenceCurrency: Currency): Promise<any> {
-    const latestDateColumnData = await getLatestDateColumn(auth);
-    if (!latestDateColumnData) return null;
-
-    const { column, date } = latestDateColumnData;
+async function getSummaryByCurrency(auth: OAuth2Client, columnData: any, equivalenceCurrency: Currency): Promise<any> {
+    const { column, date } = columnData;
 
     const sources = await getPaymentSources(auth);
     const values = await getColumnValues(auth, column);
@@ -201,4 +201,16 @@ export async function getLatestSummaryByCurrency(auth: OAuth2Client, equivalence
             amount: equivalenceAmount
         }
     };
+}
+
+export async function getLatestSummaryByCurrency(auth: OAuth2Client, equivalenceCurrency: Currency): Promise<any> {
+    const latestDateColumnData = await getLatestDateColumn(auth);
+    if (!latestDateColumnData) return null;
+    return getSummaryByCurrency(auth, latestDateColumnData, equivalenceCurrency);
+}
+
+export async function getPreviousSummaryByCurrency(auth: OAuth2Client, equivalenceCurrency: Currency): Promise<any> {
+    const previousDateColumnData = await getLatestDateColumn(auth, -1);
+    if (!previousDateColumnData) return null;
+    return getSummaryByCurrency(auth, previousDateColumnData, equivalenceCurrency);
 }

@@ -1,30 +1,33 @@
 import 'dotenv/config';
-import { Telegraf, Markup } from 'telegraf';
+import { Telegraf } from 'telegraf';
 import {
     createColumn,
     getPaymentSources,
     setValue,
     checkAllValuesSet,
     getAllRecipients,
-    getLatestSummaryByCurrency, getLatestValues
+    getLatestSummaryByCurrency,
+    getLatestValues,
+    getPreviousSummaryByCurrency
 } from './src/spreadsheets';
 import { Pool, appendPool, findActivePoolByChatId } from './src/pools';
 import { formatSummaryByCurrency, formatEquivalence } from './src/formatters';
 import { getAuth, storeNewToken } from './src/spreadsheets/auth';
+import { OAuth2Client } from "google-auth-library";
 
 const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
 const URL = process.env.URL || 'https://budget-buddy-bot.herokuapp.com';
+const EQUIVALENCE_CURRENCY = 'EUR';
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
-
-let isWaitingForCode = false;
+const waitingForCode = new Set();
 
 const authorizeSpreadsheets = (chatId: number) => {
     return getAuth(async (authUrl: string) => {
-        isWaitingForCode = true;
+        waitingForCode.add(chatId);
         await bot.telegram.sendMessage(chatId,
-            '🤖 Кажется, я не могу получить доступ к вашей Google Spreadsheet таблице. Пожалуйста, авторизуруйтесь в Google, нажав на кнопку ниже и пришлите мне токен аутентификации.',
+            '🤖 Кажется, я не могу получить доступ к вашей Google Spreadsheet таблице.\nПожалуйста, авторизуруйтесь в Google, нажав на кнопку ниже и пришлите мне токен аутентификации.',
             {
                 reply_markup: {
                     inline_keyboard: [
@@ -43,6 +46,31 @@ const sendQuestion = (chatId: number, text: string) => {
             ]
         }
     });
+}
+
+const getSummaryMessages = async (auth: OAuth2Client): Promise<any> => {
+    const summaryByCurrency = await getLatestSummaryByCurrency(auth, EQUIVALENCE_CURRENCY);
+    if (!summaryByCurrency) {
+        return null;
+    }
+    const { byCurrency, equivalence, date } = summaryByCurrency;
+
+    let summaryText;
+    let equivalenceText;
+    const previousSummaryByCurrency = await getPreviousSummaryByCurrency(auth, EQUIVALENCE_CURRENCY);
+    if (!previousSummaryByCurrency) {
+        summaryText = formatSummaryByCurrency(byCurrency);
+        equivalenceText = formatEquivalence(equivalence);
+    } else {
+        const {
+            byCurrency: byCurrencyOld,
+            equivalence: equivalenceOld
+        } = previousSummaryByCurrency;
+        summaryText = formatSummaryByCurrency(byCurrency, byCurrencyOld);
+        equivalenceText = formatEquivalence(equivalence, equivalenceOld);
+    }
+
+    return { summaryText, equivalenceText, date };
 }
 
 const finalisePool = async (chatId: number, pool: Pool) => {
@@ -64,14 +92,10 @@ const finalisePool = async (chatId: number, pool: Pool) => {
     const allSet = await checkAllValuesSet(auth, column);
     if (allSet) {
         const recipients = await getAllRecipients(auth);
-        const { byCurrency, date, equivalence } = await getLatestSummaryByCurrency(auth, 'EUR');
+        const { summaryText, equivalenceText, date } = await getSummaryMessages(auth);
+        const message = `Подсчет завершен 👏 Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`;
         for (const chatId of recipients) {
-            const summaryText = formatSummaryByCurrency(byCurrency);
-            const equivalenceText = formatEquivalence(equivalence);
-            await bot.telegram.sendMessage(
-                chatId,
-                `Подсчет завершен 👏 Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`
-            );
+            await bot.telegram.sendMessage(chatId, message);
         }
     }
 }
@@ -130,26 +154,26 @@ bot.command('summary', async (ctx: any) => {
     } catch (err) {}
     if (!auth) return;
 
-    const summaryByCurrency = await getLatestSummaryByCurrency(auth, 'EUR');
-    if (!summaryByCurrency) {
-        ctx.reply('Нет данных');
-        return;
-    }
-
-    const { byCurrency, date, equivalence } = summaryByCurrency;
-    const summaryText = formatSummaryByCurrency(byCurrency);
-    const equivalenceText = formatEquivalence(equivalence);
-    ctx.reply(`Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`);
+    const { summaryText, equivalenceText, date } = await getSummaryMessages(auth);
+    await ctx.reply(
+        `Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`
+    );
 })
 
 bot.on('text', async (ctx: any) => {
-    const { text } = ctx.message;
-    if (isWaitingForCode) {
+    const {
+        message: {
+            text,
+            chat: { id: chatId }
+        }
+    } = ctx;
+
+    if (waitingForCode.has(chatId)) {
         await storeNewToken(text);
-        isWaitingForCode = false;
-        ctx.reply('🤖 Сработало! Теперь можете выполнить команду');
+        waitingForCode.delete(chatId);
+        ctx.reply('🤖 Сработало! Теперь можете выполнить команду.');
     }
-    const chatId = ctx.message.chat.id;
+
     await processValue(chatId, text);
 });
 
