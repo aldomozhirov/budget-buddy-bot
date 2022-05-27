@@ -146,6 +146,23 @@ export async function getAllRecipients(auth: OAuth2Client): Promise<string[]> {
     return [...new Set(recipients)] as string[];
 }
 
+export async function getLatestValues(auth: OAuth2Client): Promise<any> {
+    const latestDateColumnData = await getLatestDateColumn(auth);
+    if (!latestDateColumnData) return null;
+
+    const { column } = latestDateColumnData;
+
+    const sources = await getPaymentSources(auth);
+    const values = await getColumnValues(auth, column);
+
+    const result: any = {};
+    for (let i = 0; i < sources.length; i++) {
+        result[sources[i].id] = values[i] ? parseFloat(values[i]) : 0;
+    }
+
+    return result;
+}
+
 export async function getLatestSummaryByCurrency(auth: OAuth2Client, equivalenceCurrency: Currency): Promise<any> {
     const latestDateColumnData = await getLatestDateColumn(auth);
     if (!latestDateColumnData) return null;
