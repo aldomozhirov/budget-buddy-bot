@@ -21,11 +21,11 @@ const URL = process.env.URL || 'https://budget-buddy-bot.herokuapp.com';
 const EQUIVALENCE_CURRENCY = 'EUR';
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
-const waitingForCode = new Set();
+let isWaitingForCode = false;
 
 const authorizeSpreadsheets = (chatId: number) => {
     return getAuth(async (authUrl: string) => {
-        waitingForCode.add(chatId);
+        isWaitingForCode = true;
         await bot.telegram.sendMessage(chatId,
             '🤖 Кажется, я не могу получить доступ к вашей Google Spreadsheet таблице.\nПожалуйста, авторизуруйтесь в Google, нажав на кнопку ниже и пришлите мне токен аутентификации.',
             {
@@ -168,9 +168,9 @@ bot.on('text', async (ctx: any) => {
         }
     } = ctx;
 
-    if (waitingForCode.has(chatId)) {
+    if (isWaitingForCode) {
         await storeNewToken(text);
-        waitingForCode.delete(chatId);
+        isWaitingForCode = false;
         ctx.reply('🤖 Сработало! Теперь можете выполнить команду.');
     }
 
