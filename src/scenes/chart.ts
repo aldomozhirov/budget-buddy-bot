@@ -1,7 +1,7 @@
 import { createImage } from '../charts';
 import { Scenes, Telegraf } from 'telegraf';
 import { BudgetBuddyContext, BudgetBuddySession } from '../types/session';
-import {spliceArrayIntoChunks} from "../utils";
+import { spliceArrayIntoChunks } from '../utils';
 
 const SCENE_ID = 'chart';
 const ACTION_CALLBACK_PREFIX = 'chart';
