@@ -122,7 +122,6 @@ const finalisePool = async (chatId: number, pool: Pool, session: BudgetBuddySess
 
 const processValue = async (chatId: number, session: BudgetBuddySession, text?: string) => {
     const pool = findActivePoolByChatId(chatId);
-
     if (!pool) return;
 
     const value = text || pool.getCurrentQuestion().data.previousValue.toString();
@@ -191,10 +190,6 @@ bot.command('summary', async (ctx: any) => {
     ctx.session.chartData = await getStatisticsWithEquivalence(auth, EQUIVALENCE_CURRENCY);
     await ctx.scene.enter('chart');
 })
-
-bot.command('eval', async (ctx: any) => {
-    await ctx.reply(mexp.eval('2+2'));
-});
 
 bot.on('text', async (ctx: any) => {
     const {
