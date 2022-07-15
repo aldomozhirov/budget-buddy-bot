@@ -16,7 +16,7 @@ import { formatSummaryByCurrency, formatEquivalence } from './src/formatters';
 import { getAuth, storeNewToken } from './src/spreadsheets/auth';
 import { OAuth2Client } from 'google-auth-library';
 import { BudgetBuddyContext, BudgetBuddySession } from "./src/types/bot";
-import { ChartScene } from "./src/scenes/chart";
+import { ChartScene } from './src/scenes/chart';
 
 const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
