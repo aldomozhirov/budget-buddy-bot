@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Telegraf } from 'telegraf';
+import { Scenes, session, Telegraf } from 'telegraf';
 import {
     createColumn,
     getPaymentSources,
@@ -8,24 +8,42 @@ import {
     getAllRecipients,
     getLatestSummaryByCurrency,
     getLatestValues,
-    getPreviousSummaryByCurrency
+    getPreviousSummaryByCurrency,
+    getStatisticsWithEquivalence
 } from './src/spreadsheets';
 import { Pool, appendPool, findActivePoolByChatId } from './src/pools';
 import { formatSummaryByCurrency, formatEquivalence } from './src/formatters';
 import { getAuth, storeNewToken } from './src/spreadsheets/auth';
-import { OAuth2Client } from "google-auth-library";
+import { OAuth2Client } from 'google-auth-library';
+import { BudgetBuddyContext, BudgetBuddySession } from './src/types/session';
+import { ChartScene } from './src/scenes/chart';
 
 const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
 const URL = process.env.URL || 'https://budget-buddy-bot.herokuapp.com';
 const EQUIVALENCE_CURRENCY = 'EUR';
+const STAGE_TTL = 100;
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '');
-let isWaitingForCode = false;
+const bot = new Telegraf<BudgetBuddyContext>(process.env.TELEGRAM_BOT_TOKEN || '');
+const stage = new Scenes.Stage<BudgetBuddyContext>(
+    [
+        new ChartScene(bot)
+    ],
+    {
+        ttl: STAGE_TTL
+    }
+);
 
-const authorizeSpreadsheets = (chatId: number) => {
+bot.use(session());
+bot.use(stage.middleware());
+bot.use((ctx, next) => {
+    ctx.session.isWaitingForCode ??= false;
+    return next();
+});
+
+const authorizeSpreadsheets = (chatId: number, session: BudgetBuddySession) => {
     return getAuth(async (authUrl: string) => {
-        isWaitingForCode = true;
+        session.isWaitingForCode = true;
         await bot.telegram.sendMessage(chatId,
             '🤖 Кажется, я не могу получить доступ к вашей Google Spreadsheet таблице.\nПожалуйста, авторизуруйтесь в Google, нажав на кнопку ниже и пришлите мне токен аутентификации.',
             {
@@ -73,7 +91,7 @@ const getSummaryMessages = async (auth: OAuth2Client): Promise<any> => {
     return { summaryText, equivalenceText, date };
 }
 
-const finalisePool = async (chatId: number, pool: Pool) => {
+const finalisePool = async (chatId: number, pool: Pool, session: BudgetBuddySession) => {
     await bot.telegram.sendMessage(
         chatId,
         `📝 Я запомнил ваши значения. Теперь мы ждем когда другие участники подсчета закончат ввод значений и после этого, я пришлю вам результаты.`
@@ -81,7 +99,7 @@ const finalisePool = async (chatId: number, pool: Pool) => {
 
     let auth;
     try {
-        auth = await authorizeSpreadsheets(chatId);
+        auth = await authorizeSpreadsheets(chatId, session);
     } catch (err) {}
     if (!auth) return;
 
@@ -100,7 +118,7 @@ const finalisePool = async (chatId: number, pool: Pool) => {
     }
 }
 
-const processValue = async (chatId: number, text?: string) => {
+const processValue = async (chatId: number, session: BudgetBuddySession, text?: string) => {
     const pool = findActivePoolByChatId(chatId);
     if (!pool) return;
 
@@ -115,7 +133,7 @@ const processValue = async (chatId: number, text?: string) => {
     if (pool.isActive) {
         await sendQuestion(chatId, pool.getCurrentQuestion().text);
     } else {
-        await finalisePool(chatId, pool);
+        await finalisePool(chatId, pool, session);
     }
 }
 
@@ -124,7 +142,7 @@ bot.command('start', async (ctx: any) => {
 
     let auth;
     try {
-        auth = await authorizeSpreadsheets(chatId);
+        auth = await authorizeSpreadsheets(chatId, ctx.session);
     } catch (err) {}
     if (!auth) return;
 
@@ -150,7 +168,7 @@ bot.command('summary', async (ctx: any) => {
 
     let auth;
     try {
-        auth = await authorizeSpreadsheets(chatId);
+        auth = await authorizeSpreadsheets(chatId, ctx.session);
     } catch (err) {}
     if (!auth) return;
 
@@ -158,6 +176,9 @@ bot.command('summary', async (ctx: any) => {
     await ctx.reply(
         `Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`
     );
+
+    ctx.session.chartData = await getStatisticsWithEquivalence(auth, EQUIVALENCE_CURRENCY);
+    await ctx.scene.enter('chart');
 })
 
 bot.on('text', async (ctx: any) => {
@@ -165,21 +186,22 @@ bot.on('text', async (ctx: any) => {
         message: {
             text,
             chat: { id: chatId }
-        }
+        },
+        session
     } = ctx;
 
-    if (isWaitingForCode) {
+    if (session.isWaitingForCode) {
         await storeNewToken(text);
-        isWaitingForCode = false;
+        ctx.session.isWaitingForCode = false;
         ctx.reply('🤖 Сработало! Теперь можете выполнить команду.');
     }
 
-    await processValue(chatId, text);
+    await processValue(chatId, session, text);
 });
 
 bot.action(/next+/, async (ctx: any) => {
     const chatId = parseInt(ctx.match.input.substring(4));
-    await processValue(chatId);
+    await processValue(chatId, ctx.session);
 });
 
 if (process.env.NODE_ENV === 'production') {

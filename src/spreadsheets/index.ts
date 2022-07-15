@@ -65,6 +65,18 @@ async function getLatestDateColumn(auth: OAuth2Client, shift?: number) {
     };
 }
 
+async function getAllDateColumns(auth: OAuth2Client) {
+    const sheets = google.sheets({ version: 'v4', auth });
+    const dates = await getDates(sheets);
+
+    if (!dates.length) return null;
+
+    return dates.map((date: string, index: number) => ({
+        column: colName(staticColumns.length + index),
+        date
+    }));
+}
+
 export async function getPaymentSources(auth: OAuth2Client): Promise<any> {
     const sheets = google.sheets({version: 'v4', auth});
     try {
@@ -213,4 +225,25 @@ export async function getPreviousSummaryByCurrency(auth: OAuth2Client, equivalen
     const previousDateColumnData = await getLatestDateColumn(auth, -1);
     if (!previousDateColumnData) return null;
     return getSummaryByCurrency(auth, previousDateColumnData, equivalenceCurrency);
+}
+
+export async function getStatisticsWithEquivalence(auth: OAuth2Client, equivalenceCurrency: Currency): Promise<Statistics> {
+    const dateColumnsData = await getAllDateColumns(auth);
+    const amounts: any = { EQUIVALENCE: [] };
+    const dates: string[] = [];
+    const keySet: Set<string> = new Set();
+    const byCurrencySummaries: any[] = await Promise.all(dateColumnsData.map(async (columnData: any) => {
+        const { byCurrency, equivalence, date } = await getSummaryByCurrency(auth, columnData, equivalenceCurrency);
+        Object.keys(byCurrency).forEach((key: string) => keySet.add(key));
+        dates.push(date);
+        amounts['EQUIVALENCE'].push(equivalence.amount);
+        return byCurrency;
+    }));
+    for(const entry of byCurrencySummaries) {
+        for (const key of keySet) {
+            if (!amounts[key]) amounts[key] = [];
+            amounts[key].push(entry[key] || 0);
+        }
+    }
+    return { amounts, dates };
 }
