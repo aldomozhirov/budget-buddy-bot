@@ -13,6 +13,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "chart.js": "^3.8.0",
+    "chartjs-node-canvas": "^4.1.6",
     "current-currency": "^1.6.2",
     "dotenv": "^16.0.0",
     "googleapis": "^39.2.0",
