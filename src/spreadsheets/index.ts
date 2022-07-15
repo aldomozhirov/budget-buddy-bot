@@ -227,11 +227,6 @@ export async function getPreviousSummaryByCurrency(auth: OAuth2Client, equivalen
     return getSummaryByCurrency(auth, previousDateColumnData, equivalenceCurrency);
 }
 
-interface Statistics {
-    amounts: { [key: string]: number[] },
-    dates: string[]
-}
-
 export async function getStatisticsWithEquivalence(auth: OAuth2Client, equivalenceCurrency: Currency): Promise<Statistics> {
     const dateColumnsData = await getAllDateColumns(auth);
     const amounts: any = { EQUIVALENCE: [] };

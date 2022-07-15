@@ -15,27 +15,31 @@ import { Pool, appendPool, findActivePoolByChatId } from './src/pools';
 import { formatSummaryByCurrency, formatEquivalence } from './src/formatters';
 import { getAuth, storeNewToken } from './src/spreadsheets/auth';
 import { OAuth2Client } from 'google-auth-library';
-import { BudgetBuddyContext, BudgetBuddySession } from "./src/types/bot";
+import { BudgetBuddyContext, BudgetBuddySession } from './src/types/session';
 import { ChartScene } from './src/scenes/chart';
 
 const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
 const URL = process.env.URL || 'https://budget-buddy-bot.herokuapp.com';
 const EQUIVALENCE_CURRENCY = 'EUR';
+const STAGE_TTL = 100;
 
 const bot = new Telegraf<BudgetBuddyContext>(process.env.TELEGRAM_BOT_TOKEN || '');
+const stage = new Scenes.Stage<BudgetBuddyContext>(
+    [
+        new ChartScene(bot)
+    ],
+    {
+        ttl: STAGE_TTL
+    }
+);
 
-const chartScene = new ChartScene(bot);
-const stage = new Scenes.Stage<BudgetBuddyContext>([chartScene.scene], {
-    ttl: 100,
-})
-
-bot.use(session())
-bot.use(stage.middleware())
+bot.use(session());
+bot.use(stage.middleware());
 bot.use((ctx, next) => {
     ctx.session.isWaitingForCode ??= false;
     return next();
-})
+});
 
 const authorizeSpreadsheets = (chatId: number, session: BudgetBuddySession) => {
     return getAuth(async (authUrl: string) => {

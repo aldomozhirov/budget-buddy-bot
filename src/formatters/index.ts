@@ -1,5 +1,3 @@
-import { TEquivalence } from "../types/bot";
-
 const formatEmoji = (newAmount: number, oldAmount: number) => {
     return newAmount > oldAmount ? '🔼' :
            newAmount < oldAmount ? '🔽' : '⏹';

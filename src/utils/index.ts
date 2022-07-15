@@ -16,3 +16,12 @@ export const colName = (n: number) => {
 export const getCurrentMonthString = () => {
     return moment().format('L');
 }
+
+export const spliceArrayIntoChunks = (arr: any[], chunkSize: number): any[][] => {
+    const res = [];
+    while (arr.length > 0) {
+        const chunk = arr.splice(0, chunkSize);
+        res.push(chunk);
+    }
+    return res;
+}
