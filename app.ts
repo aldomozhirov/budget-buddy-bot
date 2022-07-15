@@ -17,6 +17,8 @@ import { getAuth, storeNewToken } from './src/spreadsheets/auth';
 import { OAuth2Client } from 'google-auth-library';
 import { BudgetBuddyContext, BudgetBuddySession } from './src/types/session';
 import { ChartScene } from './src/scenes/chart';
+// @ts-ignore
+import mexp from 'math-expression-evaluator';
 
 const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
@@ -120,16 +122,25 @@ const finalisePool = async (chatId: number, pool: Pool, session: BudgetBuddySess
 
 const processValue = async (chatId: number, session: BudgetBuddySession, text?: string) => {
     const pool = findActivePoolByChatId(chatId);
+
     if (!pool) return;
 
-    const value = text || pool.getCurrentQuestion().data.previousValue;
-    if (isNaN(parseInt(value))) {
+    const value = text || pool.getCurrentQuestion().data.previousValue.toString();
+    let evalValue;
+    try {
+        evalValue = mexp.eval(value);
+    } catch (e) {
         await bot.telegram.sendMessage(chatId, 'Неверное значение');
         await sendQuestion(chatId, pool.getCurrentQuestion().text);
         return;
     }
 
-    pool.saveAnswer(value);
+    pool.saveAnswer(evalValue);
+    await bot.telegram.sendMessage(
+        chatId,
+        `Сохранено значение ${evalValue}`
+    );
+
     if (pool.isActive) {
         await sendQuestion(chatId, pool.getCurrentQuestion().text);
     } else {
@@ -180,6 +191,10 @@ bot.command('summary', async (ctx: any) => {
     ctx.session.chartData = await getStatisticsWithEquivalence(auth, EQUIVALENCE_CURRENCY);
     await ctx.scene.enter('chart');
 })
+
+bot.command('eval', async (ctx: any) => {
+    await ctx.reply(mexp.eval('2+2'));
+});
 
 bot.on('text', async (ctx: any) => {
     const {
