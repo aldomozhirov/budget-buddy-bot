@@ -8,8 +8,7 @@ import {
     getAllRecipients,
     getLatestSummaryByCurrency,
     getLatestValues,
-    getPreviousSummaryByCurrency,
-    getStatisticsWithEquivalence
+    getPreviousSummaryByCurrency
 } from './src/spreadsheets';
 import { Pool, appendPool, findActivePoolByChatId } from './src/pools';
 import { formatSummaryByCurrency, formatEquivalence } from './src/formatters';
@@ -43,8 +42,8 @@ bot.use((ctx, next) => {
     return next();
 });
 
-const authorizeSpreadsheets = (chatId: number, session: BudgetBuddySession) => {
-    return getAuth(async (authUrl: string) => {
+const authorizeSpreadsheets = async (chatId: number, session: BudgetBuddySession) => {
+    session.auth = await getAuth(async (authUrl: string) => {
         session.isWaitingForCode = true;
         await bot.telegram.sendMessage(chatId,
             '🤖 Кажется, я не могу получить доступ к вашей Google Spreadsheet таблице.\nПожалуйста, авторизуруйтесь в Google, нажав на кнопку ниже и пришлите мне токен аутентификации.',
@@ -56,6 +55,7 @@ const authorizeSpreadsheets = (chatId: number, session: BudgetBuddySession) => {
                 }
             });
     });
+    return session.auth;
 }
 
 const sendQuestion = (chatId: number, text: string) => {
@@ -115,7 +115,13 @@ const finalisePool = async (chatId: number, pool: Pool, session: BudgetBuddySess
         const { summaryText, equivalenceText, date } = await getSummaryMessages(auth);
         const message = `Подсчет завершен 👏 Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`;
         for (const chatId of recipients) {
-            await bot.telegram.sendMessage(chatId, message);
+            await bot.telegram.sendMessage(chatId, message,{
+                reply_markup: {
+                    inline_keyboard: [
+                        [{text: 'Посмотреть график 📊', callback_data: 'chart'}]
+                    ]
+                }
+            });
         }
     }
 }
@@ -184,11 +190,15 @@ bot.command('summary', async (ctx: any) => {
 
     const { summaryText, equivalenceText, date } = await getSummaryMessages(auth);
     await ctx.reply(
-        `Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`
+        `Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`,
+        {
+            reply_markup: {
+                inline_keyboard: [
+                    [{text: 'Посмотреть график 📊', callback_data: 'chart'}]
+                ]
+            }
+        }
     );
-
-    ctx.session.chartData = await getStatisticsWithEquivalence(auth, EQUIVALENCE_CURRENCY);
-    await ctx.scene.enter('chart');
 })
 
 bot.on('text', async (ctx: any) => {
@@ -212,6 +222,10 @@ bot.on('text', async (ctx: any) => {
 bot.action(/next+/, async (ctx: any) => {
     const chatId = parseInt(ctx.match.input.substring(4));
     await processValue(chatId, ctx.session);
+});
+
+bot.action('chart', async (ctx: any) => {
+    await ctx.scene.enter('chart');
 });
 
 if (process.env.NODE_ENV === 'production') {

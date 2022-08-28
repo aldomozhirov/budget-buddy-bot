@@ -50,31 +50,33 @@ async function getColumnValues(auth: OAuth2Client, column: string): Promise<any>
     }
 }
 
-async function getLatestDateColumn(auth: OAuth2Client, shift?: number) {
-    const sheets = google.sheets({ version: 'v4', auth });
-    const dates = await getDates(sheets);
-
-    if (!dates.length) return null;
-
-    const colNumber = staticColumns.length + dates.length - 1 + (shift || 0);
-    if (colNumber < staticColumns.length) return null;
-
-    return {
-        column: colName(colNumber),
-        date: dates.pop()
-    };
-}
-
 async function getAllDateColumns(auth: OAuth2Client) {
     const sheets = google.sheets({ version: 'v4', auth });
     const dates = await getDates(sheets);
 
     if (!dates.length) return null;
 
-    return dates.map((date: string, index: number) => ({
-        column: colName(staticColumns.length + index),
-        date
-    }));
+    return dates
+        .map((date: string, index: number) => ({
+            column: colName(staticColumns.length + index),
+            date
+        }))
+        .sort((columnDataA: any, columnDataB: any) => {
+            const parsedDateA = Date.parse(columnDataA.date);
+            const parsedDateB = Date.parse(columnDataB.date);
+            return parsedDateA < parsedDateB ? -1 :
+                parsedDateA > parsedDateB ? 1 : 0;
+        });
+}
+
+async function getLatestDateColumn(auth: OAuth2Client, shift?: number) {
+    const dates = await getAllDateColumns(auth);
+    if (!dates) return null;
+
+    const position = dates.length - 1 + (shift || 0);
+    if (position < 0) return null;
+
+    return dates[position];
 }
 
 export async function getPaymentSources(auth: OAuth2Client): Promise<any> {
@@ -231,14 +233,15 @@ export async function getStatisticsWithEquivalence(auth: OAuth2Client, equivalen
     const dateColumnsData = await getAllDateColumns(auth);
     const amounts: any = { EQUIVALENCE: [] };
     const dates: string[] = [];
+    const byCurrencySummaries: any[] = [];
     const keySet: Set<string> = new Set();
-    const byCurrencySummaries: any[] = await Promise.all(dateColumnsData.map(async (columnData: any) => {
+    for (const columnData of dateColumnsData) {
         const { byCurrency, equivalence, date } = await getSummaryByCurrency(auth, columnData, equivalenceCurrency);
         Object.keys(byCurrency).forEach((key: string) => keySet.add(key));
         dates.push(date);
         amounts['EQUIVALENCE'].push(equivalence.amount);
-        return byCurrency;
-    }));
+        byCurrencySummaries.push(byCurrency);
+    }
     for(const entry of byCurrencySummaries) {
         for (const key of keySet) {
             if (!amounts[key]) amounts[key] = [];
