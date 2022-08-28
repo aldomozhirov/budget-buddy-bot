@@ -10,19 +10,16 @@ import {
     getLatestValues,
     getPreviousSummaryByCurrency,
     getStatisticsWithEquivalence
-} from './src/spreadsheets';
-import { Pool, appendPool, findActivePoolByChatId } from './src/pools';
-import { formatSummaryByCurrency, formatEquivalence } from './src/formatters';
-import { getAuth, storeNewToken } from './src/spreadsheets/auth';
+} from '../spreadsheets';
+import { Pool, appendPool, findActivePoolByChatId } from '../pools';
+import { formatSummaryByCurrency, formatEquivalence } from '../formatters';
+import { getAuth, storeNewToken } from '../spreadsheets/auth';
 import { OAuth2Client } from 'google-auth-library';
-import { BudgetBuddyContext, BudgetBuddySession } from './src/types/session';
-import { ChartScene } from './src/scenes/chart';
+import { BudgetBuddyContext, BudgetBuddySession } from '../types/session';
+import { ChartScene } from '../scenes/chart';
 // @ts-ignore
 import mexp from 'math-expression-evaluator';
 
-const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
-const PORT = process.env.PORT || 3000;
-const URL = process.env.URL || 'https://budget-buddy-bot.herokuapp.com';
 const EQUIVALENCE_CURRENCY = 'EUR';
 const STAGE_TTL = 100;
 
@@ -147,8 +144,8 @@ const processValue = async (chatId: number, session: BudgetBuddySession, text?: 
     }
 }
 
-bot.command('start', async (ctx: any) => {
-    const chatId = ctx.message.chat.id;
+const startPool = async (ctx: any) => {
+    const chatId = ctx.message?.chat.id || ctx.update?.callback_query?.message.chat.id;
 
     let auth;
     try {
@@ -159,19 +156,22 @@ bot.command('start', async (ctx: any) => {
     const paymentSources = await getPaymentSources(auth);
     const latestValues = await getLatestValues(auth);
     const userPaymentSources = paymentSources
-            .filter((source: any) => parseInt(source.chatId) === chatId)
-            .map((source: any) => ({
-                id: source.id,
-                text: `${source.name} ${source.currency} (${latestValues[source.id]})`,
-                data: { previousValue: latestValues[source.id] }
-            }));
+        .filter((source: any) => parseInt(source.chatId) === chatId)
+        .map((source: any) => ({
+            id: source.id,
+            text: `${source.name} ${source.currency} (${latestValues[source.id]})`,
+            data: { previousValue: latestValues[source.id] }
+        }));
 
     if (userPaymentSources.length) {
         const pool = new Pool(chatId, userPaymentSources);
         appendPool(pool);
         await sendQuestion(chatId, pool.getCurrentQuestion().text);
     }
-})
+}
+
+bot.command('start', startPool);
+bot.action('start', startPool);
 
 bot.command('summary', async (ctx: any) => {
     const chatId = ctx.message.chat.id;
@@ -214,10 +214,4 @@ bot.action(/next+/, async (ctx: any) => {
     await processValue(chatId, ctx.session);
 });
 
-if (process.env.NODE_ENV === 'production') {
-    bot.telegram.setWebhook(`${URL}/bot${API_TOKEN}`);
-    // @ts-ignore
-    bot.startWebhook(`/bot${API_TOKEN}`, null, PORT);
-} else {
-    bot.launch();
-}
+export default bot;
