@@ -18,17 +18,18 @@ import { BudgetBuddyContext, BudgetBuddySession } from './src/types/session';
 import { ChartScene } from './src/scenes/chart';
 // @ts-ignore
 import mexp from 'math-expression-evaluator';
+import {Currency} from "current-currency/dist/types/currencies";
 
 const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
 const URL = process.env.URL || 'https://budget-buddy-bot.herokuapp.com';
-const EQUIVALENCE_CURRENCY = 'EUR';
+const EQUIVALENCE_CURRENCY = (process.env.EQUIVALENCE_CURRENCY) as Currency || 'USD';
 const STAGE_TTL = 100;
 
 const bot = new Telegraf<BudgetBuddyContext>(process.env.TELEGRAM_BOT_TOKEN || '');
 const stage = new Scenes.Stage<BudgetBuddyContext>(
     [
-        new ChartScene(bot)
+        new ChartScene(bot, EQUIVALENCE_CURRENCY)
     ],
     {
         ttl: STAGE_TTL

@@ -3,6 +3,7 @@ import { Scenes, Telegraf } from 'telegraf';
 import { BudgetBuddyContext, BudgetBuddySession } from '../types/session';
 import { spliceArrayIntoChunks } from '../utils';
 import { getStatisticsWithEquivalence } from '../spreadsheets';
+import {Currency} from "current-currency/dist/types/currencies";
 
 const SCENE_ID = 'chart';
 const ACTION_CALLBACK_PREFIX = 'chart';
@@ -11,12 +12,12 @@ const DEFAULT_CURRENCY = 'EQUIVALENCE';
 export class ChartScene extends Scenes.BaseScene<BudgetBuddyContext> {
     private _bot: Telegraf<BudgetBuddyContext>;
 
-    constructor(bot: Telegraf<BudgetBuddyContext>) {
+    constructor(bot: Telegraf<BudgetBuddyContext>, equivalenceCurrency: Currency) {
         super(SCENE_ID);
         this._bot = bot;
 
         this.enter(async(ctx) => {
-            ctx.session.statistics = await getStatisticsWithEquivalence(ctx.session.auth, 'EUR');
+            ctx.session.statistics = await getStatisticsWithEquivalence(ctx.session.auth, equivalenceCurrency);
             await this.sendChart(ctx, DEFAULT_CURRENCY);
         })
 
