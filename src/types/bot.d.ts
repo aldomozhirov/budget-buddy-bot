@@ -8,7 +8,8 @@ interface Statistics {
     dates: string[]
 }
 
-interface ChartData extends Statistics {
-    chatId?: number;
-    messageId?: number;
+interface ChartData {
+    chatId: number;
+    messageId: number;
+    currency: string;
 }
