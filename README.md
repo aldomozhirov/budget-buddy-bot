@@ -26,6 +26,8 @@ Initiates pool of your bank accounts and other payment sources state.
 
 When this command triggered, it takes from the Spreadsheet a list of payment sources belonging to you, based on your Telegram chat ID and asks you to provide exact amount of money remaining on each of your payment sources.
 
+<img width="300" alt="start command example" src="https://user-images.githubusercontent.com/17453908/187720210-25ba76fb-65a9-4d5b-8fbb-f0d9f2110fe8.PNG">
+
 If you have several accounts under the same payment source in the same currency, and you want to summarise their amounts before storing them, or you want to apply any other mathematical operations to it, you can do it right in the message reply. Bot accepts any mathematical expression as a reply to his requests, so you can send him something like:
 ```shell
 (11244.14 + 12441.12) / 2 * 10%
@@ -33,9 +35,9 @@ If you have several accounts under the same payment source in the same currency,
 and bot will store the resulting value `1184.26` as an amount on the requested payment source.
 
 #### /summary
-On this command bot will reply with an overall summary of your budget, aggregated by currencies.
+On this command bot will reply with an overall summary of your budget, aggregated by currencies. It also will build a line chart based on your historical data for each currency, if you will ask him to do it, by pressing a button.
 
-It also will build a line chart based on your historical data for each currency, if you will ask him to do it, by pressing a button.
+<img width="300" alt="summary command example" src="https://user-images.githubusercontent.com/17453908/187720285-a811b1b2-d41b-4cc0-8bf2-431910a775de.PNG">
 
 ## Getting Started
 
@@ -43,6 +45,7 @@ It also will build a line chart based on your historical data for each currency,
 2. Create GCP account and obtain credentials to access [Google Sheets API](https://developers.google.com/sheets/api)
 3. Create Google Spreadsheet document, note document ID and sheet name
 4. Fill created Spreadsheet with information about your payment sources in format of table with following columns:
+    <img width="500" alt="spreadsheet example" src="https://user-images.githubusercontent.com/17453908/187718941-4de070bf-cda2-49fe-950c-b0dbfd41f480.png">
     - **ID** - unique identifier number of the payment source (ex: 1, 2, ...)
     - **Source** - name of the payment source (ex: Wise, Citibank)
     - **Currency** - currency identifier in ISO format (ex: EUR, USD)
