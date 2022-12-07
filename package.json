@@ -9,7 +9,7 @@
   "scripts": {
     "start": "ts-node app.ts",
     "dev": "nodemon --exec 'node --inspect=0.0.0.0:9229 --require ts-node/register app.ts'",
-    "build": "tsc -p .",
+    "postinstall": "tsc -p .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
