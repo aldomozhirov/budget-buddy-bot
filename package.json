@@ -1,6 +1,9 @@
 {
   "name": "budget-buddy-bot",
   "version": "1.0.0",
+  "engines": {
+    "node": "14.x"
+  },
   "description": "Telegram Bot helping to keep your finances under control",
   "main": "app.ts",
   "scripts": {
