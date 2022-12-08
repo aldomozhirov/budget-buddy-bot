@@ -1,6 +1,15 @@
 FROM node:14.17-alpine
 
-RUN apk update || : && apk add python
+RUN apk add --update --no-cache \
+    make \
+    g++ \
+    jpeg-dev \
+    cairo-dev \
+    giflib-dev \
+    pango-dev \
+    libtool \
+    autoconf \
+    automake
 
 ENV HOME=/home/node
 
@@ -13,9 +22,7 @@ WORKDIR $HOME/app
 COPY . $HOME/app
 
 # Install deps and compile TS
-RUN npm install && \
-    npm run build && \
-    rm -f .npmrc
+RUN npm install
 
 ENTRYPOINT ["npm"]
 CMD ["start"]
