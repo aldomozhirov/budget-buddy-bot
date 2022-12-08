@@ -1,0 +1,10 @@
+version: "3"
+services:
+  budget-buddy-bot:
+    build: .
+    environment:
+      - TELEGRAM_BOT_TOKEN=5565287752:AAF2-UqC-brdyl2f3XfU7_wnuUelh9XiT1E
+      - GOOGLE_API_CREDENTIALS={"installed":{"client_id":"780995698758-o9kjne3cjsadqspcavk65jd6q3qft063.apps.googleusercontent.com","project_id":"budget-buddy-bot","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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","redirect_uris":["urn:ietf:wg:oauth:2.0:oob","http://localhost"]}}
+      - SPREADSHEET_ID=17bYWz6HWhHdrhzik6-m_cj_sY8lhp18tg7jQpTqDrFo
+      - SHEET_NAME=Sheet3
+      - EQUIVALENCE_CURRENCY=EUR
