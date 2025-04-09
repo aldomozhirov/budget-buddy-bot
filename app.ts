@@ -59,14 +59,16 @@ const authorizeSpreadsheets = async (chatId: number, session: BudgetBuddySession
     return session.auth;
 }
 
-const sendQuestion = (chatId: number, text: string) => {
-    return bot.telegram.sendMessage(chatId, text, {
+const sendQuestion = async (session: BudgetBuddySession, chatId: number, text: string) => {
+    const message = await bot.telegram.sendMessage(chatId, text, {
         reply_markup: {
             inline_keyboard: [
                 [ { text: 'Не изменилось', callback_data: `next${chatId}` } ]
             ]
         }
     });
+    session.lastMessageId = message.message_id;
+    return message;
 }
 
 const getSummaryMessages = async (auth: OAuth2Client): Promise<any> => {
@@ -137,18 +139,21 @@ const processValue = async (chatId: number, session: BudgetBuddySession, text?: 
         evalValue = mexp.eval(value);
     } catch (e) {
         await bot.telegram.sendMessage(chatId, 'Неверное значение');
-        await sendQuestion(chatId, pool.getCurrentQuestion().text);
+        await sendQuestion(session, chatId, pool.getCurrentQuestion().text);
         return;
     }
 
     pool.saveAnswer(evalValue);
+    await bot.telegram.editMessageReplyMarkup(chatId, session.lastMessageId, undefined, {
+        inline_keyboard: []
+    })
     await bot.telegram.sendMessage(
         chatId,
         `Сохранено значение ${evalValue}`
     );
 
     if (pool.isActive) {
-        await sendQuestion(chatId, pool.getCurrentQuestion().text);
+        await sendQuestion(session, chatId, pool.getCurrentQuestion().text);
     } else {
         await finalisePool(chatId, pool, session);
     }
@@ -176,20 +181,25 @@ bot.command('start', async (ctx: any) => {
     if (userPaymentSources.length) {
         const pool = new Pool(chatId, userPaymentSources);
         appendPool(pool);
-        await sendQuestion(chatId, pool.getCurrentQuestion().text);
+        await sendQuestion(ctx.session, chatId, pool.getCurrentQuestion().text);
     }
 })
 
 bot.command('summary', async (ctx: any) => {
     const chatId = ctx.message.chat.id;
 
-    let auth;
+    let auth: any;
     try {
         auth = await authorizeSpreadsheets(chatId, ctx.session);
     } catch (err) {}
     if (!auth) return;
 
-    const { summaryText, equivalenceText, date } = await getSummaryMessages(auth);
+    let summaryMessages: any = {};
+    await ctx.persistentChatAction('typing', async () => {
+        summaryMessages = await getSummaryMessages(auth);
+    });
+    const { summaryText, equivalenceText, date } = summaryMessages;
+
     await ctx.reply(
         `Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`,
         {
@@ -223,9 +233,11 @@ bot.on('text', async (ctx: any) => {
 bot.action(/next+/, async (ctx: any) => {
     const chatId = parseInt(ctx.match.input.substring(4));
     await processValue(chatId, ctx.session);
+    ctx.answerCbQuery();
 });
 
 bot.action('chart', async (ctx: any) => {
+    ctx.editMessageReplyMarkup({  inline_keyboard: [] })
     await ctx.scene.enter('chart');
 });
 

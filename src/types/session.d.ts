@@ -6,6 +6,7 @@ interface BudgetBuddySession extends Scenes.SceneSession {
     chartData?: ChartData;
     isWaitingForCode: boolean;
     auth: OAuth2Client;
+    lastMessageId: number;
 }
 
 interface BudgetBuddyContext extends Context {

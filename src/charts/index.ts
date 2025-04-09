@@ -30,7 +30,7 @@ export async function createImage(datasets: ChartDataset[], labels: string[]): P
         plugins: [{
             id: 'background-colour',
             beforeDraw: (chart) => {
-                const ctx = chart.ctx;
+                const ctx = chart.ctx as any;
                 ctx.save();
                 ctx.fillStyle = 'white';
                 ctx.fillRect(0, 0, width, height);

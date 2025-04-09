@@ -17,7 +17,9 @@ export class ChartScene extends Scenes.BaseScene<BudgetBuddyContext> {
         this._bot = bot;
 
         this.enter(async(ctx) => {
-            ctx.session.statistics = await getStatisticsWithEquivalence(ctx.session.auth, equivalenceCurrency);
+            await ctx.persistentChatAction('upload_photo', async () => {
+                ctx.session.statistics = await getStatisticsWithEquivalence(ctx.session.auth, equivalenceCurrency);
+            });
             await this.sendChart(ctx, DEFAULT_CURRENCY);
         })
 
@@ -69,35 +71,26 @@ export class ChartScene extends Scenes.BaseScene<BudgetBuddyContext> {
         ctx.session.chartData = { chatId, messageId, currency };
     }
 
-    private async editChart(ctx: { session: BudgetBuddySession }, currency: string) {
+    private async editChart(ctx: any, currency: string) {
         const { statistics, chartData } = ctx.session;
         if (!statistics || !chartData) return;
 
-        const { amounts, dates } = statistics;
         const { chatId, messageId, currency: currentCurrency } = chartData;
 
         if (currency === currentCurrency) return;
 
-        await this._bot.telegram.editMessageMedia(
+        await this._bot.telegram.editMessageReplyMarkup(
             chatId,
             messageId,
             undefined,
             {
-                type: 'photo',
-                media: {
-                    source: await createImage([{ label: currency, data: amounts[currency] }], dates)
-                }
-            },
-            {
-                // @ts-ignore
-                parse_mode: 'MarkdownV2',
-                reply_markup: {
-                    inline_keyboard: this.getKeys(amounts, currency)
-                }
+                inline_keyboard: []
             }
         );
 
-        ctx.session.chartData = { ...chartData, currency };
+        await this.sendChart(ctx, currency);
+
+        // ctx.session.chartData = { ...chartData, currency };
     }
 
 }
