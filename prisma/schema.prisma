@@ -1,0 +1,48 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int     @id @default(autoincrement())
+  name        String
+  surname     String?
+  telegram_id String  @unique
+  vaults      Vault[]
+}
+
+model Vault {
+  id        Int           @id @default(autoincrement())
+  title     String
+  currency  String
+  active    Boolean       @default(true)
+  owner     User          @relation(fields: [ownerId], references: [id])
+  ownerId   Int
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  statuses  VaultStatus[]
+}
+
+model Poll {
+  id          Int           @id @default(autoincrement())
+  createdAt   DateTime      @default(now())
+  completedAt DateTime?
+  statuses    VaultStatus[]
+}
+
+model VaultStatus {
+  id      Int   @id @default(autoincrement())
+  vault   Vault @relation(fields: [vaultId], references: [id])
+  vaultId Int
+  poll    Poll  @relation(fields: [pollId], references: [id])
+  pollId  Int
+  amount  Float
+}

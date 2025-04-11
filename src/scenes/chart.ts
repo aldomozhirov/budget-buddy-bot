@@ -2,23 +2,26 @@ import { createImage } from '../charts';
 import { Scenes, Telegraf } from 'telegraf';
 import { BudgetBuddyContext, BudgetBuddySession } from '../types/session';
 import { spliceArrayIntoChunks } from '../utils';
-import { getStatisticsWithEquivalence } from '../spreadsheets';
 import {Currency} from "current-currency/dist/types/currencies";
+import {Persistence} from "../persistence";
+import {formatDate} from "../formatters";
 
 const SCENE_ID = 'chart';
 const ACTION_CALLBACK_PREFIX = 'chart';
 const DEFAULT_CURRENCY = 'EQUIVALENCE';
 
 export class ChartScene extends Scenes.BaseScene<BudgetBuddyContext> {
-    private _bot: Telegraf<BudgetBuddyContext>;
+    private readonly bot: Telegraf<BudgetBuddyContext>;
+    private readonly persistence: Persistence;
 
-    constructor(bot: Telegraf<BudgetBuddyContext>, equivalenceCurrency: Currency) {
+    constructor(bot: Telegraf<BudgetBuddyContext>, persistence: Persistence, equivalenceCurrency: Currency) {
         super(SCENE_ID);
-        this._bot = bot;
+        this.bot = bot;
+        this.persistence = persistence;
 
         this.enter(async(ctx) => {
             await ctx.persistentChatAction('upload_photo', async () => {
-                ctx.session.statistics = await getStatisticsWithEquivalence(ctx.session.auth, equivalenceCurrency);
+                ctx.session.statistics = await this.persistence.getStatisticsWithEquivalence(equivalenceCurrency);
             });
             await this.sendChart(ctx, DEFAULT_CURRENCY);
         })
@@ -37,7 +40,7 @@ export class ChartScene extends Scenes.BaseScene<BudgetBuddyContext> {
             const { chartData } = ctx.session;
             if (chartData) {
                 const { chatId, messageId } = chartData;
-                await this._bot.telegram.deleteMessage(chatId, messageId);
+                await this.bot.telegram.deleteMessage(chatId, messageId);
                 ctx.session.chartData = undefined;
             }
         });
@@ -57,9 +60,10 @@ export class ChartScene extends Scenes.BaseScene<BudgetBuddyContext> {
         if (!statistics) return;
 
         const { amounts, dates } = statistics;
+        const formattedDates = dates.map(date => formatDate(date));
 
         const { message_id: messageId, chat: { id: chatId } } = await ctx.replyWithPhoto(
-            { source: await createImage([{ label: currency, data: amounts[currency] }], dates) },
+            { source: await createImage([{ label: currency, data: amounts[currency] }], formattedDates) },
             {
                 parse_mode: 'MarkdownV2',
                 reply_markup: {
@@ -79,7 +83,7 @@ export class ChartScene extends Scenes.BaseScene<BudgetBuddyContext> {
 
         if (currency === currentCurrency) return;
 
-        await this._bot.telegram.editMessageReplyMarkup(
+        await this.bot.telegram.editMessageReplyMarkup(
             chatId,
             messageId,
             undefined,
@@ -89,8 +93,6 @@ export class ChartScene extends Scenes.BaseScene<BudgetBuddyContext> {
         );
 
         await this.sendChart(ctx, currency);
-
-        // ctx.session.chartData = { ...chartData, currency };
     }
 
 }

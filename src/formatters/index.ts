@@ -1,3 +1,5 @@
+import moment from "moment";
+
 const formatEmoji = (newAmount: number, oldAmount: number) => {
     return newAmount > oldAmount ? '🔼' :
            newAmount < oldAmount ? '🔽' : '⏹';
@@ -35,4 +37,8 @@ export const formatEquivalence = (equivalence: TEquivalence, equivalenceOld?: TE
         return `${emoji} Эквивалент в переводе на ${currency}: ${amount.toFixed(2)} (${oldAmount.toFixed(2)}, ${increase})`;
     }
     return `Эквивалент в переводе на ${currency}: ${amount.toFixed(2)}`;
+}
+
+export const formatDate = (date: string) => {
+    return moment(date).format('DD/MM/YYYY');
 }

@@ -1,24 +1,14 @@
 import 'dotenv/config';
 import { Scenes, session, Telegraf } from 'telegraf';
-import {
-    createColumn,
-    getPaymentSources,
-    setValue,
-    checkAllValuesSet,
-    getAllRecipients,
-    getLatestSummaryByCurrency,
-    getLatestValues,
-    getPreviousSummaryByCurrency
-} from './src/spreadsheets';
 import { Pool, appendPool, findActivePoolByChatId } from './src/pools';
-import { formatSummaryByCurrency, formatEquivalence } from './src/formatters';
-import { getAuth, storeNewToken } from './src/spreadsheets/auth';
-import { OAuth2Client } from 'google-auth-library';
+import { formatSummaryByCurrency, formatEquivalence, formatDate } from './src/formatters';
 import { BudgetBuddyContext, BudgetBuddySession } from './src/types/session';
 import { ChartScene } from './src/scenes/chart';
 // @ts-ignore
 import mexp from 'math-expression-evaluator';
 import {Currency} from "current-currency/dist/types/currencies";
+import {Persistence} from "./src/persistence";
+import {DatabasePersistence} from "./src/persistence/db";
 
 const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
@@ -27,9 +17,11 @@ const EQUIVALENCE_CURRENCY = (process.env.EQUIVALENCE_CURRENCY) as Currency || '
 const STAGE_TTL = 100;
 
 const bot = new Telegraf<BudgetBuddyContext>(process.env.TELEGRAM_BOT_TOKEN || '');
+
+const persistence: Persistence = new DatabasePersistence();
 const stage = new Scenes.Stage<BudgetBuddyContext>(
     [
-        new ChartScene(bot, EQUIVALENCE_CURRENCY)
+        new ChartScene(bot, persistence, EQUIVALENCE_CURRENCY)
     ],
     {
         ttl: STAGE_TTL
@@ -43,22 +35,6 @@ bot.use((ctx, next) => {
     return next();
 });
 
-const authorizeSpreadsheets = async (chatId: number, session: BudgetBuddySession) => {
-    session.auth = await getAuth(async (authUrl: string) => {
-        session.isWaitingForCode = true;
-        await bot.telegram.sendMessage(chatId,
-            '🤖 Кажется, я не могу получить доступ к вашей Google Spreadsheet таблице.\nПожалуйста, авторизуруйтесь в Google, нажав на кнопку ниже и пришлите мне токен аутентификации.',
-            {
-                reply_markup: {
-                    inline_keyboard: [
-                        [ { text: 'Аутентифицироваться в Google', url: authUrl } ]
-                    ]
-                }
-            });
-    });
-    return session.auth;
-}
-
 const sendQuestion = async (session: BudgetBuddySession, chatId: number, text: string) => {
     const message = await bot.telegram.sendMessage(chatId, text, {
         reply_markup: {
@@ -71,8 +47,8 @@ const sendQuestion = async (session: BudgetBuddySession, chatId: number, text: s
     return message;
 }
 
-const getSummaryMessages = async (auth: OAuth2Client): Promise<any> => {
-    const summaryByCurrency = await getLatestSummaryByCurrency(auth, EQUIVALENCE_CURRENCY);
+const getSummaryMessages = async (): Promise<any> => {
+    const summaryByCurrency = await persistence.getLatestSummaryByCurrency(EQUIVALENCE_CURRENCY);
     if (!summaryByCurrency) {
         return null;
     }
@@ -80,7 +56,7 @@ const getSummaryMessages = async (auth: OAuth2Client): Promise<any> => {
 
     let summaryText;
     let equivalenceText;
-    const previousSummaryByCurrency = await getPreviousSummaryByCurrency(auth, EQUIVALENCE_CURRENCY);
+    const previousSummaryByCurrency = await persistence.getPreviousSummaryByCurrency(EQUIVALENCE_CURRENCY);
     if (!previousSummaryByCurrency) {
         summaryText = formatSummaryByCurrency(byCurrency);
         equivalenceText = formatEquivalence(equivalence);
@@ -93,7 +69,7 @@ const getSummaryMessages = async (auth: OAuth2Client): Promise<any> => {
         equivalenceText = formatEquivalence(equivalence, equivalenceOld);
     }
 
-    return { summaryText, equivalenceText, date };
+    return { summaryText, equivalenceText, date: formatDate(date) };
 }
 
 const finalisePool = async (chatId: number, pool: Pool, session: BudgetBuddySession) => {
@@ -102,20 +78,14 @@ const finalisePool = async (chatId: number, pool: Pool, session: BudgetBuddySess
         `📝 Я запомнил ваши значения. Теперь мы ждем когда другие участники подсчета закончат ввод значений и после этого, я пришлю вам результаты.`
     );
 
-    let auth;
-    try {
-        auth = await authorizeSpreadsheets(chatId, session);
-    } catch (err) {}
-    if (!auth) return;
-
-    const column = await createColumn(auth);
+    const column = await persistence.createColumn();
     for(const answer of pool.answers) {
-        await setValue(auth, column, answer.id, answer.text);
+        await persistence.setValue(column, answer.id, answer.text);
     }
-    const allSet = await checkAllValuesSet(auth, column);
+    const allSet = await persistence.checkAllValuesSet(column);
     if (allSet) {
-        const recipients = await getAllRecipients(auth);
-        const { summaryText, equivalenceText, date } = await getSummaryMessages(auth);
+        const recipients = await persistence.getAllRecipients();
+        const { summaryText, equivalenceText, date } = await getSummaryMessages();
         const message = `Подсчет завершен 👏 Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`;
         for (const chatId of recipients) {
             await bot.telegram.sendMessage(chatId, message,{
@@ -162,14 +132,8 @@ const processValue = async (chatId: number, session: BudgetBuddySession, text?: 
 bot.command('start', async (ctx: any) => {
     const chatId = ctx.message.chat.id;
 
-    let auth;
-    try {
-        auth = await authorizeSpreadsheets(chatId, ctx.session);
-    } catch (err) {}
-    if (!auth) return;
-
-    const paymentSources = await getPaymentSources(auth);
-    const latestValues = await getLatestValues(auth);
+    const paymentSources = await persistence.getPaymentSources();
+    const latestValues = await persistence.getLatestValues();
     const userPaymentSources = paymentSources
             .filter((source: any) => parseInt(source.chatId) === chatId)
             .map((source: any) => ({
@@ -186,17 +150,9 @@ bot.command('start', async (ctx: any) => {
 })
 
 bot.command('summary', async (ctx: any) => {
-    const chatId = ctx.message.chat.id;
-
-    let auth: any;
-    try {
-        auth = await authorizeSpreadsheets(chatId, ctx.session);
-    } catch (err) {}
-    if (!auth) return;
-
     let summaryMessages: any = {};
     await ctx.persistentChatAction('typing', async () => {
-        summaryMessages = await getSummaryMessages(auth);
+        summaryMessages = await getSummaryMessages();
     });
     const { summaryText, equivalenceText, date } = summaryMessages;
 
@@ -220,12 +176,6 @@ bot.on('text', async (ctx: any) => {
         },
         session
     } = ctx;
-
-    if (session.isWaitingForCode) {
-        await storeNewToken(text);
-        ctx.session.isWaitingForCode = false;
-        ctx.reply('🤖 Сработало! Теперь можете выполнить команду.');
-    }
 
     await processValue(chatId, session, text);
 });
