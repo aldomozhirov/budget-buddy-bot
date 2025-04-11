@@ -132,6 +132,33 @@ export class DatabasePersistence extends Persistence
 		})
 	}
 
+	public async getUserVaults(telegramId: string): Promise<any[]>
+	{
+		const vaults = await this.prisma.vault.findMany({
+			where: {
+				owner: {
+					telegram_id: telegramId
+				}
+			},
+			include: {
+				statuses: {
+					orderBy: {
+						poll: {
+							createdAt: 'desc'
+						}
+					}
+				}
+			}
+		})
+
+		return vaults.map(vault => ({
+			id: vault.id,
+			currency: vault.currency,
+			title: vault.title,
+			amount: vault.statuses[0]?.amount || 0
+		}))
+	}
+
 	private async getPollSummary(poll: any, equivalenceCurrency: Currency)
 	{
 		const byCurrency: any = {};

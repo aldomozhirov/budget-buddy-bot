@@ -19,4 +19,6 @@ export abstract class Persistence {
 	public abstract getPreviousSummaryByCurrency(equivalenceCurrency: Currency): Promise<any>;
 
 	public abstract getStatisticsWithEquivalence(equivalenceCurrency: Currency): Promise<Statistics>;
+
+	public abstract getUserVaults(telegramId: string): Promise<any[]>;
 }

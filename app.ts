@@ -168,6 +168,17 @@ bot.command('summary', async (ctx: any) => {
     );
 })
 
+bot.command('vaults', async (ctx: any) => {
+    const vaults = await persistence.getUserVaults(ctx.message.chat.id.toString());
+    if (!vaults.length) {
+        await ctx.reply('Вы еще не добавили ни одного счета');
+        return;
+    }
+
+    const vaultsText = vaults.map(vault => `${vault.title} (${vault.amount} ${vault.currency})`).join('\n');
+    await ctx.reply(`Ваши счета:\n\n${vaultsText}`);
+})
+
 bot.on('text', async (ctx: any) => {
     const {
         message: {
