@@ -4,10 +4,9 @@ Telegram Bot helping to keep your finances under control
 
 ## Stack
 
-- Node.js `>14.x.x`
-- NPM `>8.x.x`
+- Node.js `>18.x.x`
+- NPM `>1.x.x`
 - Typescript
-- [Google Sheets API](https://developers.google.com/sheets/api)
 - [Telegraf.js](https://telegrafjs.org/)
 - [Chart.js](https://www.chartjs.org/)
 
@@ -54,29 +53,12 @@ On this command bot will reply with an overall summary of your budget, aggregate
 5. Clone this repo and define following environment variables on your machine (preferably using `.env` file):
     ```shell
     TELEGRAM_BOT_TOKEN=<your telegram bot Token from step 1>
-    GOOGLE_API_CREDENTIALS=<google api credentials json from step 2>
-    SPREADSHEET_ID=<spreadsheet id from step 3>
-    SHEET_NAME=<sheet name in your spreadsheet document from step 3>
     EQUIVALENCE_CURRENCY=<preferable currency to calculate total amount equivalence>
+    DATABASE_URL=file:<path where sqlite DB file should be created>
     ```
 6. Install project dependencies with `npm install`   
-7. Run application in development mode using command `npm run dev`
-8. Open conversation with your bot in Telegram
-9. Hit `/start` command to launch your first amounts pool
-
-## Deploying on Heroku
-This project is 100% compatible with Heroku. Follow these steps to deploy the application there:
-1. If you don't have account on Heroku yet, [sign up here](https://signup.heroku.com/)
-2. Login to your Heroku account and create new project
-3. Go to Settings, click `Reveal Config Vars` and add following vars:
-   ```shell
-   NODE_ENV=production
-   NODE_OPTIONS=--max_old_space_size=2560
-   TELEGRAM_BOT_TOKEN=<your telegram bot Token>
-   GOOGLE_API_CREDENTIALS=<google api credentials json>
-   SPREADSHEET_ID=<spreadsheet id>
-   SHEET_NAME=<sheet name in your spreadsheet document>
-   EQUIVALENCE_CURRENCY=<preferable currency to calculate total amount equivalence>
-   ```
-4. Deploy this project using [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli)
+7. Create SQLite database file using command `npm run create-db`
+8. Run application in development mode using command `npm run dev`
+9. Open conversation with your bot in Telegram
+10. Hit `/start` command to launch your first amounts pool
 
