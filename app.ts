@@ -7,8 +7,9 @@ import { ChartScene } from './src/scenes/chart';
 // @ts-ignore
 import mexp from 'math-expression-evaluator';
 import {Currency} from "current-currency/dist/types/currencies";
-import {Persistence} from "./src/persistence";
-import {DatabasePersistence} from "./src/persistence/db";
+import {BudgetBuddyBotService} from "./src/service";
+import {CreateVaultScene} from "./src/scenes/createVault";
+import {EditVaultScene} from "./src/scenes/editVault";
 
 const API_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
@@ -18,10 +19,12 @@ const STAGE_TTL = 100;
 
 const bot = new Telegraf<BudgetBuddyContext>(process.env.TELEGRAM_BOT_TOKEN || '');
 
-const persistence: Persistence = new DatabasePersistence();
+const service: BudgetBuddyBotService = new BudgetBuddyBotService();
 const stage = new Scenes.Stage<BudgetBuddyContext>(
     [
-        new ChartScene(bot, persistence, EQUIVALENCE_CURRENCY)
+        new ChartScene(bot, service, EQUIVALENCE_CURRENCY),
+        new CreateVaultScene(service),
+        new EditVaultScene(service)
     ],
     {
         ttl: STAGE_TTL
@@ -48,7 +51,7 @@ const sendQuestion = async (session: BudgetBuddySession, chatId: number, text: s
 }
 
 const getSummaryMessages = async (): Promise<any> => {
-    const summaryByCurrency = await persistence.getLatestSummaryByCurrency(EQUIVALENCE_CURRENCY);
+    const summaryByCurrency = await service.getLatestSummaryByCurrency(EQUIVALENCE_CURRENCY);
     if (!summaryByCurrency) {
         return null;
     }
@@ -56,7 +59,7 @@ const getSummaryMessages = async (): Promise<any> => {
 
     let summaryText;
     let equivalenceText;
-    const previousSummaryByCurrency = await persistence.getPreviousSummaryByCurrency(EQUIVALENCE_CURRENCY);
+    const previousSummaryByCurrency = await service.getPreviousSummaryByCurrency(EQUIVALENCE_CURRENCY);
     if (!previousSummaryByCurrency) {
         summaryText = formatSummaryByCurrency(byCurrency);
         equivalenceText = formatEquivalence(equivalence);
@@ -78,13 +81,13 @@ const finalisePool = async (chatId: number, pool: Pool, session: BudgetBuddySess
         `📝 Я запомнил ваши значения. Теперь мы ждем когда другие участники подсчета закончат ввод значений и после этого, я пришлю вам результаты.`
     );
 
-    const column = await persistence.createColumn();
+    const column = await service.createColumn();
     for(const answer of pool.answers) {
-        await persistence.setValue(column, answer.id, answer.text);
+        await service.setValue(column, answer.id, answer.text);
     }
-    const allSet = await persistence.checkAllValuesSet(column);
+    const allSet = await service.checkAllValuesSet(column);
     if (allSet) {
-        const recipients = await persistence.getAllRecipients();
+        const recipients = await service.getAllRecipients();
         const { summaryText, equivalenceText, date } = await getSummaryMessages();
         const message = `Подсчет завершен 👏 Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`;
         for (const chatId of recipients) {
@@ -132,8 +135,8 @@ const processValue = async (chatId: number, session: BudgetBuddySession, text?: 
 bot.command('start', async (ctx: any) => {
     const chatId = ctx.message.chat.id;
 
-    const paymentSources = await persistence.getPaymentSources();
-    const latestValues = await persistence.getLatestValues();
+    const paymentSources = await service.getPaymentSources();
+    const latestValues = await service.getLatestValues();
     const userPaymentSources = paymentSources
             .filter((source: any) => parseInt(source.chatId) === chatId)
             .map((source: any) => ({
@@ -169,7 +172,7 @@ bot.command('summary', async (ctx: any) => {
 })
 
 bot.command('vaults', async (ctx: any) => {
-    const vaults = await persistence.getUserVaults(ctx.message.chat.id.toString());
+    const vaults = await service.getUserVaults(ctx.message.chat.id.toString());
     if (!vaults.length) {
         await ctx.reply('Вы еще не добавили ни одного счета');
         return;
@@ -177,6 +180,14 @@ bot.command('vaults', async (ctx: any) => {
 
     const vaultsText = vaults.map(vault => `${vault.title} (${vault.amount} ${vault.currency})`).join('\n');
     await ctx.reply(`Ваши счета:\n\n${vaultsText}`);
+})
+
+bot.command('create', async (ctx: any) => {
+    await ctx.scene.enter('createVault');
+})
+
+bot.command('edit', async (ctx: any) => {
+    await ctx.scene.enter('editVault');
 })
 
 bot.on('text', async (ctx: any) => {

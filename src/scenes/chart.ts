@@ -1,9 +1,9 @@
-import { createImage } from '../charts';
-import { Scenes, Telegraf } from 'telegraf';
-import { BudgetBuddyContext, BudgetBuddySession } from '../types/session';
-import { spliceArrayIntoChunks } from '../utils';
+import {createImage} from '../charts';
+import {Scenes, Telegraf} from 'telegraf';
+import {BudgetBuddyContext, BudgetBuddySession} from '../types/session';
+import {spliceArrayIntoChunks} from '../utils';
 import {Currency} from "current-currency/dist/types/currencies";
-import {Persistence} from "../persistence";
+import {BudgetBuddyBotService} from "../service";
 import {formatDate} from "../formatters";
 
 const SCENE_ID = 'chart';
@@ -12,16 +12,20 @@ const DEFAULT_CURRENCY = 'EQUIVALENCE';
 
 export class ChartScene extends Scenes.BaseScene<BudgetBuddyContext> {
     private readonly bot: Telegraf<BudgetBuddyContext>;
-    private readonly persistence: Persistence;
 
-    constructor(bot: Telegraf<BudgetBuddyContext>, persistence: Persistence, equivalenceCurrency: Currency) {
+    private readonly service: BudgetBuddyBotService;
+
+    constructor(bot: Telegraf<BudgetBuddyContext>, service: BudgetBuddyBotService,
+        equivalenceCurrency: Currency)
+    {
         super(SCENE_ID);
         this.bot = bot;
-        this.persistence = persistence;
+        this.service = service;
 
         this.enter(async(ctx) => {
             await ctx.persistentChatAction('upload_photo', async () => {
-                ctx.session.statistics = await this.persistence.getStatisticsWithEquivalence(equivalenceCurrency);
+                ctx.session.statistics =
+                    await this.service.getStatisticsWithEquivalence(equivalenceCurrency);
             });
             await this.sendChart(ctx, DEFAULT_CURRENCY);
         })

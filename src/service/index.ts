@@ -1,10 +1,9 @@
-import {Persistence} from "../index";
 import {Currency} from "current-currency/dist/types/currencies";
-import {PrismaClient} from '../../../generated/prisma'
+import {PrismaClient} from '../../generated/prisma'
 import {convert} from "current-currency";
 
 
-export class DatabasePersistence extends Persistence
+export class BudgetBuddyBotService
 {
 	private readonly prisma = new PrismaClient();
 
@@ -157,6 +156,76 @@ export class DatabasePersistence extends Persistence
 			title: vault.title,
 			amount: vault.statuses[0]?.amount || 0
 		}))
+	}
+
+	public async createVault(title: string, currency: Currency, telegramId: string): Promise<any>
+	{
+		const owner = await this.prisma.user.findFirst({ where: { telegram_id: telegramId } })
+
+		if (!owner)
+		{
+			throw Error(`User with telegram ID ${telegramId} not found!`)
+		}
+
+		return  this.prisma.vault.create({
+			data: {
+				title,
+				currency: currency.toString(),
+				ownerId: owner.id
+			}
+		})
+	}
+
+	public async renameVault(id: number, title: string): Promise<void>
+	{
+		await this.prisma.vault.update({
+			where: {
+				id
+			},
+			data: {
+				title
+			}
+		})
+	}
+
+	public async changeVaultCurrency(id: number, currency: string): Promise<void>
+	{
+		await this.prisma.vault.update({
+			where: {
+				id
+			},
+			data: {
+				currency
+			}
+		})
+	}
+
+	public async changeVaultAmount(id: number, amount: number): Promise<void>
+	{
+		const status = await this.prisma.vaultStatus.findFirst({
+			where: {
+				vaultId: id
+			},
+			orderBy: {
+				poll: {
+					createdAt: 'desc'
+				}
+			}
+		})
+
+		if (!status)
+		{
+			throw Error("Cannot find vault status");
+		}
+
+		await this.prisma.vaultStatus.update({
+			where: {
+				id: status.id
+			},
+			data: {
+				amount
+			}
+		})
 	}
 
 	private async getPollSummary(poll: any, equivalenceCurrency: Currency)
