@@ -1,5 +1,5 @@
-import { Scenes, Telegraf } from 'telegraf';
-import { BudgetBuddyContext, BudgetBuddySession } from '../types/session';
+import { Scenes } from 'telegraf';
+import { BudgetBuddyContext } from '../types/session';
 import {BudgetBuddyBotService} from "../service";
 import {Currency, CURRENCY_CODES} from "current-currency/dist/types/currencies";
 
@@ -8,11 +8,15 @@ const SCENE_ID = 'editVault';
 const CHOOSE_VAULT_STEP = 0;
 const ACTION_STEP = 1;
 
-const ACTION_CALLBACK_PREFIX = 'edit_';
+const ACTION_CALLBACK_PREFIX = 'edit';
 
 const TITLE_ACTION = 'title';
 const CURRENCY_ACTION = 'currency';
 const AMOUNT_ACTION = 'amount';
+const ACTIVE_STATE_ACTION = 'active';
+
+const ACTIVE_STATE_ACTION_CONFIRM = 'confirm';
+const ACTIVE_STATE_ACTION_CANCEL = 'cancel';
 
 export class EditVaultScene extends Scenes.BaseScene<BudgetBuddyContext> {
 	private readonly service: BudgetBuddyBotService;
@@ -21,6 +25,7 @@ export class EditVaultScene extends Scenes.BaseScene<BudgetBuddyContext> {
 	private options: any[] = [];
 	private currentVault: any;
 	private currentAction: string = '';
+	private currentActionParams: string[] = [];
 
 	constructor(service: BudgetBuddyBotService) {
 		super(SCENE_ID);
@@ -37,7 +42,7 @@ export class EditVaultScene extends Scenes.BaseScene<BudgetBuddyContext> {
 			const vaults = await this.service.getUserVaults(chatId.toString());
 			let vaultsText = ""
 			vaults.forEach((vault, index) => {
-				vaultsText += `${index + 1}. ${vault.title} (${vault.amount} ${vault.currency})\n`;
+				vaultsText += `${index + 1}. ${vault.title} (${vault.amount === undefined ? '?' : vault.amount} ${vault.currency})\n`;
 				this.options.push(vault)
 			});
 
@@ -51,13 +56,26 @@ export class EditVaultScene extends Scenes.BaseScene<BudgetBuddyContext> {
 
 		const regexp = new RegExp(`${ACTION_CALLBACK_PREFIX}+`);
 		this.action(regexp, async (ctx) => {
-			const action = ctx.match.input.substring(ACTION_CALLBACK_PREFIX.length);
-			if (!action) {
+			const commands = ctx.match.input.split('_')
+
+			this.currentAction = commands[1]
+			if (!this.currentAction) {
 				await ctx.scene.leave();
 				return ctx.scene.enter('editVault');
 			}
-			this.currentAction = action;
-			this.instructAction(ctx);
+
+			if (commands.length === 2) {
+				this.instructAction(ctx);
+			}
+			else
+			{
+				this.currentActionParams = commands.slice(2);
+				if (await this.performAction(ctx))
+				{
+					await ctx.scene.leave();
+				}
+			}
+
 			await ctx.answerCbQuery();
 		});
 
@@ -86,13 +104,18 @@ export class EditVaultScene extends Scenes.BaseScene<BudgetBuddyContext> {
 			return;
 		}
 		this.currentVault = this.options[vaultNumber - 1];
+
+		const inlineKeyboard = [];
+		inlineKeyboard.push([ { text: 'Переименовать', callback_data: `${ACTION_CALLBACK_PREFIX}_${TITLE_ACTION}` } ])
+		inlineKeyboard.push([ { text: 'Изменить валюту', callback_data: `${ACTION_CALLBACK_PREFIX}_${CURRENCY_ACTION}` } ]);
+		if (this.currentVault.amount !== undefined) {
+			inlineKeyboard.push([ { text: 'Изменить текущее значение', callback_data: `${ACTION_CALLBACK_PREFIX}_${AMOUNT_ACTION}` } ]);
+		}
+		inlineKeyboard.push([ { text: 'Деактивировать', callback_data: `${ACTION_CALLBACK_PREFIX}_${ACTIVE_STATE_ACTION}` } ]);
+
 		await ctx.reply(`Что вы хотите сделать со счетом ${this.currentVault.title} (${this.currentVault.currency})?`, {
 			reply_markup: {
-				inline_keyboard: [
-					[ { text: 'Переименовать', callback_data: `${ACTION_CALLBACK_PREFIX}${TITLE_ACTION}` } ],
-					[ { text: 'Изменить валюту', callback_data: `${ACTION_CALLBACK_PREFIX}${CURRENCY_ACTION}` } ],
-					[ { text: 'Изменить текущее значение', callback_data: `${ACTION_CALLBACK_PREFIX}${AMOUNT_ACTION}` } ]
-				]
+				inline_keyboard: inlineKeyboard
 			}
 		});
 	}
@@ -108,6 +131,22 @@ export class EditVaultScene extends Scenes.BaseScene<BudgetBuddyContext> {
 			case AMOUNT_ACTION:
 				ctx.reply('Введите новое текущее значение счета');
 				break;
+			case ACTIVE_STATE_ACTION:
+				ctx.reply('Вы уверены, что хотите деактивировать этот счет?', {
+					reply_markup: {
+						inline_keyboard: [
+							[{
+								text: 'Да',
+								callback_data: `${ACTION_CALLBACK_PREFIX}_${ACTIVE_STATE_ACTION}_${ACTIVE_STATE_ACTION_CONFIRM}`
+							},
+							{
+								text: 'Нет',
+								callback_data: `${ACTION_CALLBACK_PREFIX}_${ACTIVE_STATE_ACTION}_${ACTIVE_STATE_ACTION_CANCEL}`
+							}]
+						]
+					}
+				});
+				break;
 			default:
 				ctx.reply('Неизвестное действие. Попробуйте еще раз.');
 				break;
@@ -122,6 +161,8 @@ export class EditVaultScene extends Scenes.BaseScene<BudgetBuddyContext> {
 				return this.editCurrencyAction(ctx);
 			case AMOUNT_ACTION:
 				return this.editAmountAction(ctx);
+			case ACTIVE_STATE_ACTION:
+				return this.deactivateVaultAction(ctx);
 			default:
 				await ctx.reply('Неизвестное действие. Попробуйте еще раз.');
 				return false;
@@ -154,6 +195,16 @@ export class EditVaultScene extends Scenes.BaseScene<BudgetBuddyContext> {
 		}
 		await this.service.changeVaultAmount(this.currentVault.id, newAmount);
 		await ctx.reply(`Текущее значение счета ${this.currentVault.title} изменено на ${newAmount}`);
+		return true;
+	}
+
+	private async deactivateVaultAction(ctx: any): Promise<boolean> {
+		if (this.currentActionParams[0] !== ACTIVE_STATE_ACTION_CONFIRM) {
+			await ctx.reply('Отмена деактивации счета');
+			return true;
+		}
+		await this.service.changeVaultActiveState(this.currentVault.id, false);
+		await ctx.reply(`Счет ${this.currentVault.title} деактивирован`);
 		return true;
 	}
 

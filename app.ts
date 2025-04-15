@@ -135,18 +135,17 @@ const processValue = async (chatId: number, session: BudgetBuddySession, text?: 
 bot.command('start', async (ctx: any) => {
     const chatId = ctx.message.chat.id;
 
-    const paymentSources = await service.getPaymentSources();
+    const vaults = await service.getUserVaults(chatId.toString());
     const latestValues = await service.getLatestValues();
-    const userPaymentSources = paymentSources
-            .filter((source: any) => parseInt(source.chatId) === chatId)
-            .map((source: any) => ({
-                id: source.id,
-                text: `${source.name} ${source.currency} (${latestValues[source.id]})`,
-                data: { previousValue: latestValues[source.id] }
+    const pollItems = vaults
+            .map((vault: any) => ({
+                id: vault.id,
+                text: `${vault.title} ${vault.currency} (${latestValues[vault.id] === undefined ? '?' : latestValues[vault.id]})`,
+                data: { previousValue: latestValues[vault.id] }
             }));
 
-    if (userPaymentSources.length) {
-        const pool = new Pool(chatId, userPaymentSources);
+    if (pollItems.length) {
+        const pool = new Pool(chatId, pollItems);
         appendPool(pool);
         await sendQuestion(ctx.session, chatId, pool.getCurrentQuestion().text);
     }
@@ -178,7 +177,9 @@ bot.command('vaults', async (ctx: any) => {
         return;
     }
 
-    const vaultsText = vaults.map(vault => `${vault.title} (${vault.amount} ${vault.currency})`).join('\n');
+    const vaultsText = vaults.map(vault =>
+        `${vault.title} (${vault.amount === undefined ? '?' : vault.amount} ${vault.currency})`
+    ).join('\n');
     await ctx.reply(`Ваши счета:\n\n${vaultsText}`);
 })
 

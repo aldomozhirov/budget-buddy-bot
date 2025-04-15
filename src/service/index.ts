@@ -131,13 +131,16 @@ export class BudgetBuddyBotService
 		})
 	}
 
-	public async getUserVaults(telegramId: string): Promise<any[]>
+	public async getUserVaults(telegramId: string, includeDeactivated: boolean = false): Promise<any[]>
 	{
 		const vaults = await this.prisma.vault.findMany({
 			where: {
 				owner: {
 					telegram_id: telegramId
-				}
+				},
+				...!includeDeactivated ? {
+					active: true
+				} : {}
 			},
 			include: {
 				statuses: {
@@ -154,7 +157,7 @@ export class BudgetBuddyBotService
 			id: vault.id,
 			currency: vault.currency,
 			title: vault.title,
-			amount: vault.statuses[0]?.amount || 0
+			amount: vault.statuses[0]?.amount
 		}))
 	}
 
@@ -224,6 +227,18 @@ export class BudgetBuddyBotService
 			},
 			data: {
 				amount
+			}
+		})
+	}
+
+	public async changeVaultActiveState(id: number, active: boolean)
+	{
+		await this.prisma.vault.update({
+			where: {
+				id
+			},
+			data: {
+				active
 			}
 		})
 	}
