@@ -37,6 +37,7 @@ export class Pool {
 
     goToPreviousQuestion() {
         if (this.index > 0) {
+            this.answers.pop();
             this.index--;
         }
     }
