@@ -30,6 +30,16 @@ export class Pool {
             this.index++;
         }
     }
+
+    isFirstQuestion(): boolean {
+        return this.index === 0;
+    }
+
+    goToPreviousQuestion() {
+        if (this.index > 0) {
+            this.index--;
+        }
+    }
 }
 
 export const appendPool = (pool: Pool) => {

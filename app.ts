@@ -39,11 +39,19 @@ bot.use((ctx, next) => {
 });
 
 const sendQuestion = async (session: BudgetBuddySession, chatId: number, text: string) => {
+    const pool = findActivePoolByChatId(chatId);
+    if (!pool) return;
+
+    const inlineKeyboard = []
+    inlineKeyboard.push([ { text: 'Не изменилось ➡️', callback_data: `next${chatId}` } ]);
+    if (!pool.isFirstQuestion())
+    {
+        inlineKeyboard.push([ { text: 'К предыдущему ⬅️', callback_data: `previous${chatId}` } ]);
+    }
+
     const message = await bot.telegram.sendMessage(chatId, text, {
         reply_markup: {
-            inline_keyboard: [
-                [ { text: 'Не изменилось', callback_data: `next${chatId}` } ]
-            ]
+            inline_keyboard: inlineKeyboard
         }
     });
     session.lastMessageId = message.message_id;
@@ -206,6 +214,15 @@ bot.on('text', async (ctx: any) => {
 bot.action(/next+/, async (ctx: any) => {
     const chatId = parseInt(ctx.match.input.substring(4));
     await processValue(chatId, ctx.session);
+    ctx.answerCbQuery();
+});
+
+bot.action(/previous+/, async (ctx: any) => {
+    const chatId = parseInt(ctx.match.input.substring(8));
+    const pool = findActivePoolByChatId(chatId);
+    if (!pool) return;
+    pool.goToPreviousQuestion();
+    await sendQuestion(ctx.session, chatId, pool.getCurrentQuestion().text);
     ctx.answerCbQuery();
 });
 

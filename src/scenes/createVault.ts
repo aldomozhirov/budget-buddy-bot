@@ -1,4 +1,4 @@
-import { Scenes, Telegraf } from 'telegraf';
+import { Scenes } from 'telegraf';
 import { BudgetBuddyContext, BudgetBuddySession } from '../types/session';
 import {BudgetBuddyBotService} from "../service";
 import {Currency, CURRENCY_CODES} from "current-currency/dist/types/currencies";
