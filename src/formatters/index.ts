@@ -1,4 +1,5 @@
 import moment from "moment";
+import 'moment/locale/ru';
 
 const formatEmoji = (newAmount: number, oldAmount: number) => {
     return newAmount > oldAmount ? '🔼' :
@@ -41,4 +42,13 @@ export const formatEquivalence = (equivalence: TEquivalence, equivalenceOld?: TE
 
 export const formatDate = (date: string) => {
     return moment(date).format('DD/MM/YYYY');
+}
+
+export const formatPollDateTime = (dateTime: string) => {
+    moment().locale('ru');
+    return moment(dateTime).calendar();
+}
+
+export const formatUserName = (user: any) => {
+    return [user.name, user.surname].join(' ')
 }

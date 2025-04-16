@@ -1,7 +1,12 @@
 import 'dotenv/config';
-import { Scenes, session, Telegraf } from 'telegraf';
-import { Pool, appendPool, findActivePoolByChatId } from './src/pools';
-import { formatSummaryByCurrency, formatEquivalence, formatDate } from './src/formatters';
+import {Scenes, session, Telegraf, Telegram} from 'telegraf';
+import { Poll, appendPoll, findActivePollByChatId } from './src/polls';
+import {
+    formatSummaryByCurrency,
+    formatEquivalence,
+    formatDate,
+    formatPollDateTime, formatUserName
+} from './src/formatters';
 import { BudgetBuddyContext, BudgetBuddySession } from './src/types/session';
 import { ChartScene } from './src/scenes/chart';
 // @ts-ignore
@@ -17,6 +22,7 @@ const URL = process.env.URL || 'https://budget-buddy-bot.herokuapp.com';
 const EQUIVALENCE_CURRENCY = (process.env.EQUIVALENCE_CURRENCY) as Currency || 'USD';
 const STAGE_TTL = 100;
 
+const telegram = new Telegram(process.env.TELEGRAM_BOT_TOKEN || '');
 const bot = new Telegraf<BudgetBuddyContext>(process.env.TELEGRAM_BOT_TOKEN || '');
 
 const service: BudgetBuddyBotService = new BudgetBuddyBotService();
@@ -39,12 +45,12 @@ bot.use((ctx, next) => {
 });
 
 const sendQuestion = async (session: BudgetBuddySession, chatId: number, text: string) => {
-    const pool = findActivePoolByChatId(chatId);
-    if (!pool) return;
+    const poll = findActivePollByChatId(chatId);
+    if (!poll) return;
 
     const inlineKeyboard = []
     inlineKeyboard.push([ { text: 'Не изменилось ➡️', callback_data: `next${chatId}` } ]);
-    if (!pool.isFirstQuestion())
+    if (!poll.isFirstQuestion())
     {
         inlineKeyboard.push([ { text: 'К предыдущему ⬅️', callback_data: `previous${chatId}` } ]);
     }
@@ -83,18 +89,18 @@ const getSummaryMessages = async (): Promise<any> => {
     return { summaryText, equivalenceText, date: formatDate(date) };
 }
 
-const finalisePool = async (chatId: number, pool: Pool, session: BudgetBuddySession) => {
+const finalisePoll = async (chatId: number, poll: Poll, session: BudgetBuddySession) => {
     await bot.telegram.sendMessage(
         chatId,
         `📝 Я запомнил ваши значения. Теперь мы ждем когда другие участники подсчета закончат ввод значений и после этого, я пришлю вам результаты.`
     );
 
-    const column = await service.createColumn();
-    for(const answer of pool.answers) {
-        await service.setValue(column, answer.id, answer.text);
+    for(const answer of poll.answers) {
+        await service.setPollValue(poll.pollId, answer.id, answer.text);
     }
-    const allSet = await service.checkAllValuesSet(column);
+    const allSet = await service.checkAllValuesSet(poll.pollId);
     if (allSet) {
+        await service.completePoll(poll.pollId);
         const recipients = await service.getAllRecipients();
         const { summaryText, equivalenceText, date } = await getSummaryMessages();
         const message = `Подсчет завершен 👏 Сводный отчет по состоянию на ${date}:\n\n${summaryText}\n${equivalenceText}`;
@@ -111,20 +117,20 @@ const finalisePool = async (chatId: number, pool: Pool, session: BudgetBuddySess
 }
 
 const processValue = async (chatId: number, session: BudgetBuddySession, text?: string) => {
-    const pool = findActivePoolByChatId(chatId);
-    if (!pool) return;
+    const poll = findActivePollByChatId(chatId);
+    if (!poll) return;
 
-    const value = text || pool.getCurrentQuestion().data.previousValue.toString();
+    const value = text || poll.getCurrentQuestion().data.previousValue.toString();
     let evalValue;
     try {
         evalValue = mexp.eval(value);
     } catch (e) {
         await bot.telegram.sendMessage(chatId, 'Неверное значение');
-        await sendQuestion(session, chatId, pool.getCurrentQuestion().text);
+        await sendQuestion(session, chatId, poll.getCurrentQuestion().text);
         return;
     }
 
-    pool.saveAnswer(evalValue);
+    poll.saveAnswer(evalValue);
     await bot.telegram.editMessageReplyMarkup(chatId, session.lastMessageId, undefined, {
         inline_keyboard: []
     })
@@ -133,30 +139,75 @@ const processValue = async (chatId: number, session: BudgetBuddySession, text?: 
         `Сохранено значение ${evalValue}`
     );
 
-    if (pool.isActive) {
-        await sendQuestion(session, chatId, pool.getCurrentQuestion().text);
+    if (poll.isActive) {
+        await sendQuestion(session, chatId, poll.getCurrentQuestion().text);
     } else {
-        await finalisePool(chatId, pool, session);
+        await finalisePoll(chatId, poll, session);
     }
 }
 
 bot.command('start', async (ctx: any) => {
     const chatId = ctx.message.chat.id;
 
-    const vaults = await service.getUserVaults(chatId.toString());
-    const latestValues = await service.getLatestValues();
-    const pollItems = vaults
-            .map((vault: any) => ({
-                id: vault.id,
-                text: `${vault.title} ${vault.currency} (${latestValues[vault.id] === undefined ? '?' : latestValues[vault.id]})`,
-                data: { previousValue: latestValues[vault.id] }
-            }));
-
-    if (pollItems.length) {
-        const pool = new Pool(chatId, pollItems);
-        appendPool(pool);
-        await sendQuestion(ctx.session, chatId, pool.getCurrentQuestion().text);
+    // Check if user already has started a poll
+    const activePoll = findActivePollByChatId(chatId);
+    if (activePoll)
+    {
+        await ctx.reply('Вы уже находитесь в режиме подсчета');
+        await sendQuestion(ctx.session, chatId, activePoll.getCurrentQuestion().text);
+        return;
     }
+
+    // Check if there are polls started by other users
+    const currentPolls = await service.getNotCompletedPolls();
+    let pollId: number;
+    if (currentPolls.length) {
+        const currentPoll = currentPolls[0];
+        pollId = currentPoll.id;
+        const createdAt = formatPollDateTime(currentPoll.createdAt);
+        const createdBy = formatUserName(currentPoll.createdBy);
+        await ctx.reply(
+            `Вы добавились к подсчету созданном ${createdAt} пользователем ${createdBy}`
+        );
+    }
+    else
+    {
+        const newPoll = await service.createPoll(chatId.toString());
+        pollId = newPoll.id;
+
+        await ctx.reply('Вы создали новый подсчет');
+
+        const recipients= (await service.getAllRecipients())
+            .filter((r) => r !== chatId.toString());
+        const createdBy = formatUserName(newPoll.createdBy);
+        for (const recipient of recipients) {
+            await bot.telegram.sendMessage(
+                recipient,
+                `Пользователь ${createdBy} начал новый подсчет. Чтобы присоединиться, введите команду /start`
+            );
+        }
+    }
+
+    const vaults = await service.getUserVaults(chatId.toString());
+    const pollItems = vaults
+            .map((vault: any) => {
+                const previousValue = vault.amount;
+                return {
+                    id: vault.id,
+                    text: `${vault.title} ${vault.currency} (${previousValue === undefined ? '?' : previousValue})`,
+                    data: { previousValue }
+                }
+            });
+
+    if (!pollItems.length)
+    {
+        await ctx.reply('У вас нет счетов для подсчета. Пожалуйста, добавьте их с помощью команды /create');
+        return;
+    }
+
+    const poll = new Poll(chatId, pollId, pollItems);
+    appendPoll(poll);
+    await sendQuestion(ctx.session, chatId, poll.getCurrentQuestion().text);
 })
 
 bot.command('summary', async (ctx: any) => {
@@ -219,22 +270,23 @@ bot.action(/next+/, async (ctx: any) => {
 
 bot.action(/previous+/, async (ctx: any) => {
     const chatId = parseInt(ctx.match.input.substring(8));
-    const pool = findActivePoolByChatId(chatId);
-    if (!pool) return;
-    pool.goToPreviousQuestion();
-    await sendQuestion(ctx.session, chatId, pool.getCurrentQuestion().text);
+    const poll = findActivePollByChatId(chatId);
+    if (!poll) return;
+    poll.goToPreviousQuestion();
+    await sendQuestion(ctx.session, chatId, poll.getCurrentQuestion().text);
     ctx.answerCbQuery();
 });
 
 bot.action('chart', async (ctx: any) => {
     ctx.editMessageReplyMarkup({  inline_keyboard: [] })
     await ctx.scene.enter('chart');
-});
+})
 
-if (process.env.NODE_ENV === 'production') {
-    bot.telegram.setWebhook(`${URL}/bot${API_TOKEN}`);
-    // @ts-ignore
-    bot.startWebhook(`/bot${API_TOKEN}`, null, PORT);
-} else {
-    bot.launch();
-}
+telegram.setMyCommands([
+    {command: 'start', description: 'Начать подсчет'},
+    {command: 'summary', description: 'Получить сводный отчет'},
+    {command: 'vaults', description: 'Посмотреть свои счета'},
+    {command: 'create', description: 'Создать новый счет'},
+    {command: 'edit', description: 'Редактировать существующий счет'}
+])
+bot.launch();

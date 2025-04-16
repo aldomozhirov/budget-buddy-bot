@@ -66,6 +66,8 @@ async function main() {
 				const poll = await prisma.poll.create({
 					data: {
 						createdAt: new Date(isoDate),
+						completedAt: new Date(isoDate),
+						createdById: 1,
 					},
 				});
 				pollId = poll.id;

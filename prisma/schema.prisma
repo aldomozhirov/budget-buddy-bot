@@ -17,6 +17,7 @@ model User {
   surname     String?
   telegram_id String  @unique
   vaults      Vault[]
+  polls Poll[]
 }
 
 model Vault {
@@ -35,6 +36,8 @@ model Poll {
   id          Int           @id @default(autoincrement())
   createdAt   DateTime      @default(now())
   completedAt DateTime?
+  createdBy   User @relation(fields: [createdById], references: [id])
+  createdById Int
   statuses    VaultStatus[]
 }
 
@@ -45,4 +48,6 @@ model VaultStatus {
   poll    Poll  @relation(fields: [pollId], references: [id])
   pollId  Int
   amount  Float
+
+  @@unique(name: "statusId", [vaultId, pollId])
 }

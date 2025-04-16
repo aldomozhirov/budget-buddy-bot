@@ -1,14 +1,16 @@
-const index: Pool[] = [];
+const index: Poll[] = [];
 
-export class Pool {
+export class Poll {
     chatId: number;
+    pollId: number;
     isActive: boolean;
     private readonly questions: TQuestion[];
     readonly answers: TAnswer[];
     private index: number;
 
-    constructor(chatId: number, questions: TQuestion[]) {
+    constructor(chatId: number, pollId: number, questions: TQuestion[]) {
         this.chatId = chatId;
+        this.pollId = pollId;
         this.questions = questions;
         this.answers = [];
         this.index = 0;
@@ -43,10 +45,10 @@ export class Pool {
     }
 }
 
-export const appendPool = (pool: Pool) => {
-    index.push(pool);
+export const appendPoll = (poll: Poll) => {
+    index.push(poll);
 }
 
-export const findActivePoolByChatId = (chatId: number) => {
-    return index.find((pool) => pool.chatId === chatId && pool.isActive)
+export const findActivePollByChatId = (chatId: number) => {
+    return index.find((poll) => poll.chatId === chatId && poll.isActive)
 }

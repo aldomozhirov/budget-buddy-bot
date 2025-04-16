@@ -7,22 +7,82 @@ export class BudgetBuddyBotService
 {
 	private readonly prisma = new PrismaClient();
 
-	public async checkAllValuesSet(column: string): Promise<boolean>
+	public async getNotCompletedPolls(): Promise<any[]>
+	{
+		return this.prisma.poll.findMany({
+			where: {
+				completedAt: null
+			},
+			orderBy: {
+				createdAt: 'desc'
+			},
+			include: {
+				createdBy: true
+			}
+		})
+	}
+
+	public async createPoll(telegramId: string): Promise<any>
+	{
+		const user = await this.prisma.user.findFirst({
+			where: {
+				telegram_id: telegramId
+			}
+		});
+		if (!user) throw Error(`User with telegram ID ${telegramId} not found!`)
+
+		return this.prisma.poll.create({
+			data: {
+				createdById: user.id
+			},
+			include: {
+				createdBy: true
+			}
+		})
+	}
+
+	public async setPollValue(pollId: number, vaultId: number, value: string): Promise<void>
+	{
+		await this.prisma.vaultStatus.upsert({
+			where: {
+				statusId: {
+					pollId,
+					vaultId
+				}
+			},
+			update: {
+				amount: parseFloat(value),
+			},
+			create: {
+				pollId,
+				vaultId,
+				amount: parseFloat(value)
+			}
+		})
+	}
+
+	public async completePoll(pollId: number): Promise<void>
+	{
+		await this.prisma.poll.update({
+			where: {
+				id: pollId
+			},
+			data: {
+				completedAt: new Date()
+			}
+		})
+	}
+
+	public async checkAllValuesSet(pollId: number): Promise<boolean>
 	{
 		const poll = await this.prisma.poll.findFirst({
 			where: {
-				id: parseInt(column)
+				id: pollId
 			},
 			include: { statuses: true }
 		})
 		const vaults = await this.prisma.vault.findMany({ where: { active: true } })
 		return poll?.statuses.length === vaults.length;
-	}
-
-	public async createColumn(): Promise<string>
-	{
-		const poll = await this.prisma.poll.create({})
-		return poll.id.toString();
 	}
 
 	public async getAllRecipients(): Promise<string[]>
@@ -34,6 +94,11 @@ export class BudgetBuddyBotService
 	public async getLatestSummaryByCurrency(equivalenceCurrency: Currency): Promise<any>
 	{
 		const poll = await this.prisma.poll.findFirst({
+			where: {
+				completedAt: {
+					not: null
+				}
+			},
 			orderBy: {
 				createdAt: 'desc'
 			},
@@ -118,17 +183,6 @@ export class BudgetBuddyBotService
 			}
 		}
 		return { amounts, dates };
-	}
-
-	public async setValue(column: string, id: number, value: string): Promise<void>
-	{
-		await this.prisma.vaultStatus.create({
-			data: {
-				pollId: parseInt(column),
-				vaultId: id,
-				amount: parseFloat(value)
-			}
-		})
 	}
 
 	public async getUserVaults(telegramId: string, includeDeactivated: boolean = false): Promise<any[]>
